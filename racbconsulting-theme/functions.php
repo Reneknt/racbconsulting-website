@@ -42,8 +42,13 @@ function racb_enqueue_assets() {
   $style_ver  = file_exists($style_path) ? filemtime($style_path) : wp_get_theme()->get('Version');
   wp_enqueue_style('racb-style', $theme_uri . '/style.css', array(), $style_ver);
 
-  // Google Fonts (kept as-is)
-  wp_enqueue_style('racb-fonts', 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap', array(), null);
+  // Google Fonts for theme typography
+  wp_enqueue_style(
+    'racb-fonts',
+    'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@700;900&display=swap',
+    array(),
+    null
+  );
 
   // Main JS (cache-busted, loaded in footer)
   $js_path = $theme_dir . '/assets/racb-main.js';

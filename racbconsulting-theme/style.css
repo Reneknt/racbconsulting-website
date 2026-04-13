@@ -11,8 +11,7 @@ Text Domain: racbconsulting
 /* ============================================================
    IMPORTS — Google Fonts
    ============================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
-
+/* Font loading handled in functions.php via wp_enqueue_style() */
 
   :root {
     --primary: #9B2F6F;

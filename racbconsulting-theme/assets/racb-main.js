@@ -351,7 +351,7 @@
       "ft-svc3": "Automatización",
       "ft-svc4": "Correo + IA",
       "ft-svc5": "CRM + IA",
-      "hero-badge": "Especialistas en IA para Negocios",
+      "hero-badge": "Especialistas en IA para TEST LOCAL OK",
       "hero-btn1": "🚀 Solicita una Demo",
       "hero-btn2": "Ver Servicios →",
       "hero-stat1-label": "PYMEs atendidas",
