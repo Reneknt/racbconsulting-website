@@ -60,8 +60,30 @@ Text Domain: racbconsulting
     padding: 0.5rem 2rem; height: 148px;
   }
 
-  .logo { display: flex; align-items: center; gap: 0.5rem; text-decoration: none; }
-  .logo img { height: 44px; }
+  .logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: var(--primary);
+  }
+
+  .nav-inner .logo > img,
+  .nav-inner .logo > .custom-logo {
+  width: 160px;
+  height: auto;
+  max-height: 80px;
+  display: block;
+  }
+
+  /* Responsive logo */
+  @media (max-width: 768px) {
+  .nav-inner .logo > img,
+  .nav-inner .logo > .custom-logo {
+    width: 110px;
+    max-height: 60px;
+    }
+  }
 
   .nav-links {
     display: flex; align-items: center; gap: 2rem; list-style: none;
@@ -793,14 +815,6 @@ Text Domain: racbconsulting
   .reveal-delay-1 { transition-delay: 0.1s; }
   .reveal-delay-2 { transition-delay: 0.2s; }
   .reveal-delay-3 { transition-delay: 0.3s; }
-
-  /* Logo image */
-  .logo img {
-    height: 44px;
-    width: auto;
-    display: block;
-    /* On white nav bg — logo colors show naturally (magenta + dark gray) */
-  }
 
 
   /* ===== LANG SWITCHER ===== */

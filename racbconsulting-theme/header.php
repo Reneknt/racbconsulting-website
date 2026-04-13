@@ -15,12 +15,16 @@
 <!-- NAVIGATION -->
 <nav id="main-nav">
   <div class="nav-inner">
-    <a href="javascript:void(0)" class="logo" onclick="showPage('home')" aria-label="RACBCONSULTING">
-      <img src="<?php echo get_template_directory_uri(); ?>/assets/logo.png" 
-           alt="RACBCONSULTING logo" 
-           height="44" 
-           style="height:132px; width:auto; display:block;"
-      />
+    <?php
+      $logo_id = get_theme_mod( 'custom_logo' );
+      $logo_img = $logo_id ? wp_get_attachment_image( $logo_id, 'full', false, [ 'alt' => get_bloginfo( 'name' ) ] ) : '';
+    ?>
+    <a href="javascript:void(0)" class="logo" onclick="showPage('home')" aria-label="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>">
+      <?php if ( $logo_img ) : ?>
+        <?php echo $logo_img; ?>
+      <?php else : ?>
+        <?php echo esc_html( get_bloginfo( 'name' ) ); ?>
+      <?php endif; ?>
     </a>
     <ul class="nav-links" id="navLinks">
       <li><a href="javascript:void(0)" onclick="showPage('home')" data-i18n="nav-home">Inicio</a></li>
