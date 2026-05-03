@@ -695,50 +695,44 @@ get_header();
 </main>
 
 <!-- ADVISOR MODAL -->
-<?php /* TODO: Replace this temporary modal with the real Private Executive Advisor widget when implemented. */ ?>
-<div id="advisor-modal" role="dialog" aria-modal="true" aria-labelledby="advisor-modal-title">
+<?php /* TODO: Replace this temporary chat UI with the real Private Executive Advisor widget when implemented. */ ?>
+<div id="advisor-modal" class="advisor-modal" role="dialog" aria-modal="true" aria-labelledby="advisor-modal-title" aria-hidden="true">
   <div class="advisor-modal-box">
 
-    <button class="advisor-modal-close" onclick="closeAdvisorModal()" aria-label="Close">&#x2715;</button>
+    <div class="advisor-chat-header">
+      <div class="advisor-chat-header-info">
+        <p class="advisor-modal-label">Private Executive Advisor</p>
+        <h3 id="advisor-modal-title" class="advisor-modal-title">Executive Advisor</h3>
+      </div>
+      <button class="advisor-modal-close" onclick="closeAdvisorModal()" aria-label="Close">&#x2715;</button>
+    </div>
 
-    <p class="advisor-modal-label">Private Executive Advisor</p>
+    <div id="advisor-chat-history" class="advisor-chat-history">
 
-    <h3 id="advisor-modal-title" class="advisor-modal-title">
-      Tell us what is happening inside your operation.
-    </h3>
-
-    <p class="advisor-modal-desc">
-      Our Executive Advisory Desk will review it and guide you to the right next step.
-    </p>
-
-    <form id="advisor-form" class="advisor-form" onsubmit="handleAdvisorForm(event)">
-
-      <div class="advisor-field">
-        <label for="advisor-name">Name</label>
-        <input type="text" id="advisor-name" name="name" required placeholder="Your name" />
+      <div class="advisor-msg advisor-msg--assistant">
+        <p>Welcome. I'm your RACBCONSULTING Executive Advisor. Tell me what is happening inside your operation, and I'll help identify the right next step.</p>
       </div>
 
-      <div class="advisor-field">
-        <label for="advisor-company">Company</label>
-        <input type="text" id="advisor-company" name="company" required placeholder="Company name" />
+      <div id="advisor-quick-prompts" class="advisor-quick-prompts">
+        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">We are losing leads</button>
+        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Scheduling is chaotic</button>
+        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Follow-up is inconsistent</button>
+        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Operations feel overloaded</button>
       </div>
 
-      <div class="advisor-field">
-        <label for="advisor-email">Email</label>
-        <input type="email" id="advisor-email" name="email" required placeholder="your@email.com" />
-      </div>
+    </div>
 
-      <div class="advisor-field">
-        <label for="advisor-problem">Main operational problem</label>
-        <textarea id="advisor-problem" name="problem" required rows="4" placeholder="Describe the main issue you are facing..."></textarea>
-      </div>
-
-      <button type="submit" class="btn-primary advisor-submit">Send Advisory Request</button>
-
-    </form>
-
-    <div id="advisor-confirmation" class="advisor-confirmation" style="display:none;">
-      <p>Your advisory request has been prepared. Please email <a href="mailto:ceo@racbconsulting.com">ceo@racbconsulting.com</a> or book your Executive Diagnostic.</p>
+    <div class="advisor-chat-input-area">
+      <textarea
+        id="advisor-chat-input"
+        class="advisor-chat-input"
+        placeholder="Describe what is happening inside your operation..."
+        rows="2"
+        onkeydown="handleAdvisorKey(event)"
+      ></textarea>
+      <button class="advisor-chat-send" onclick="sendAdvisorMessage()" aria-label="Send">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
     </div>
 
   </div>

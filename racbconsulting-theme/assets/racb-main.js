@@ -109,35 +109,115 @@
     }
   }
 
-  // ===== ADVISOR MODAL =====
+  // ===== ADVISOR CHAT MODAL =====
+
+  const ADVISOR_REPLY = 'Thank you. Based on what you shared, this may require an Executive Diagnostic to identify where execution is breaking and where revenue may be leaking.';
+  const MVP_URL = 'https://mvp.racbconsulting.com';
+
   function openAdvisorModal() {
     const modal = document.getElementById('advisor-modal');
-    if (modal) {
-      modal.style.display = 'flex';
-      requestAnimationFrame(() => modal.classList.add('modal-visible'));
-      document.body.style.overflow = 'hidden';
-    }
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => {
+      const input = document.getElementById('advisor-chat-input');
+      if (input) input.focus();
+    }, 100);
   }
+
   function closeAdvisorModal() {
     const modal = document.getElementById('advisor-modal');
-    if (modal) {
-      modal.classList.remove('modal-visible');
-      setTimeout(() => {
-        modal.style.display = 'none';
-        document.body.style.overflow = '';
-        const form = document.getElementById('advisor-form');
-        const confirmation = document.getElementById('advisor-confirmation');
-        if (form) { form.reset(); form.style.display = ''; }
-        if (confirmation) confirmation.style.display = 'none';
-      }, 300);
-    }
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    resetAdvisorChat();
   }
-  function handleAdvisorForm(e) {
-    e.preventDefault();
-    const form = document.getElementById('advisor-form');
-    const confirmation = document.getElementById('advisor-confirmation');
-    if (form) form.style.display = 'none';
-    if (confirmation) confirmation.style.display = 'block';
+
+  function resetAdvisorChat() {
+    const history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+    // Rebuild to initial state
+    history.innerHTML = `
+      <div class="advisor-msg advisor-msg--assistant">
+        <p>Welcome. I'm your RACBCONSULTING Executive Advisor. Tell me what is happening inside your operation, and I'll help identify the right next step.</p>
+      </div>
+      <div id="advisor-quick-prompts" class="advisor-quick-prompts">
+        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">We are losing leads</button>
+        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Scheduling is chaotic</button>
+        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Follow-up is inconsistent</button>
+        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Operations feel overloaded</button>
+      </div>`;
+    const input = document.getElementById('advisor-chat-input');
+    if (input) input.value = '';
+  }
+
+  function appendAdvisorUserMessage(text) {
+    const history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+    const msg = document.createElement('div');
+    msg.className = 'advisor-msg advisor-msg--user';
+    msg.innerHTML = `<p>${escapeHtml(text)}</p>`;
+    history.appendChild(msg);
+    scrollAdvisorHistory();
+  }
+
+  function appendAdvisorAssistantMessage() {
+    const history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'advisor-msg advisor-msg--assistant';
+    wrap.innerHTML = `<p>${ADVISOR_REPLY}</p>`;
+    history.appendChild(wrap);
+    // TODO: MVP dependency — CTA intentionally routes to mvp.racbconsulting.com. MVP is managed in separate RACBCONSULTING-MVP project.
+    const cta = document.createElement('a');
+    cta.href = MVP_URL;
+    cta.target = '_blank';
+    cta.rel = 'noopener';
+    cta.className = 'advisor-chat-cta';
+    cta.textContent = 'Book Executive Diagnostic';
+    history.appendChild(cta);
+    scrollAdvisorHistory();
+  }
+
+  function scrollAdvisorHistory() {
+    const history = document.getElementById('advisor-chat-history');
+    if (history) history.scrollTop = history.scrollHeight;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function sendAdvisorMessage() {
+    const input = document.getElementById('advisor-chat-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    hideAdvisorQuickPrompts();
+    appendAdvisorUserMessage(text);
+    setTimeout(appendAdvisorAssistantMessage, 600);
+  }
+
+  function sendAdvisorPrompt(btn) {
+    const text = btn.textContent.trim();
+    hideAdvisorQuickPrompts();
+    appendAdvisorUserMessage(text);
+    setTimeout(appendAdvisorAssistantMessage, 600);
+  }
+
+  function hideAdvisorQuickPrompts() {
+    const prompts = document.getElementById('advisor-quick-prompts');
+    if (prompts) prompts.remove();
+  }
+
+  function handleAdvisorKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendAdvisorMessage();
+    }
   }
 
   // ===== FORM HANDLER =====
@@ -829,7 +909,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (typeof closeAdvisorModal === 'function') {
     const advisor = document.getElementById('advisor-modal');
-    if (advisor && advisor.classList.contains('modal-visible')) { closeAdvisorModal(); return; }
+    if (advisor && advisor.classList.contains('is-open')) { closeAdvisorModal(); return; }
   }
   if (typeof closePrivacy === 'function') {
     const privacy = document.getElementById('privacy-modal');
@@ -859,7 +939,9 @@ document.addEventListener('click', (e) => {
   window.handleForm = handleForm;
   window.openAdvisorModal = openAdvisorModal;
   window.closeAdvisorModal = closeAdvisorModal;
-  window.handleAdvisorForm = handleAdvisorForm;
+  window.sendAdvisorMessage = sendAdvisorMessage;
+  window.sendAdvisorPrompt = sendAdvisorPrompt;
+  window.handleAdvisorKey = handleAdvisorKey;
   window.toggleLang = toggleLang;
   window.applyLang = applyLang;
 
