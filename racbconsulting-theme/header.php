@@ -27,12 +27,13 @@
       <?php endif; ?>
     </a>
     <ul class="nav-links" id="navLinks">
-      <li><a href="javascript:void(0)" onclick="showPage('home')" data-i18n="nav-home">Inicio</a></li>
-      <li><a href="javascript:void(0)" onclick="showPage('services')" data-i18n="nav-services">Servicios IA</a></li>
-      <li><a href="javascript:void(0)" onclick="showPage('cases')" data-i18n="nav-cases">Casos de Éxito</a></li>
-      <li><a href="javascript:void(0)" onclick="showPage('blog')" data-i18n="nav-blog">Blog</a></li>
-      <li><a href="javascript:void(0)" onclick="showPage('contact')" data-i18n="nav-contact">Contacto</a></li>
-      <li><a href="javascript:void(0)" class="nav-cta" onclick="showPage('demo')" data-i18n="nav-cta">Agenda tu Demo IA</a></li>
+      <?php /* TODO: WPML — wrap each label in ICL_LANGUAGE_CODE conditional or wpml_object_id for translated page links */ ?>
+      <li><a href="<?php echo esc_url( home_url( '/about/' ) ); ?>" data-i18n="nav-about">About</a></li>
+      <li><a href="<?php echo esc_url( home_url( '/case-studies/' ) ); ?>" data-i18n="nav-cases">Case Studies</a></li>
+      <li><a href="<?php echo esc_url( home_url( '/contact/' ) ); ?>" data-i18n="nav-contact">Contact</a></li>
+      <?php /* TODO: ACF — replace CTA label with get_field('nav_cta_label', 'option') when options page is registered */ ?>
+      <?php /* TODO: MVP dependency — Executive Diagnostic CTA intentionally routes to mvp.racbconsulting.com. MVP is managed in separate RACBCONSULTING-MVP project. */ ?>
+      <li><a href="https://mvp.racbconsulting.com" class="nav-cta" data-i18n="nav-cta" target="_blank" rel="noopener">Book Executive Diagnostic</a></li>
     </ul>
     <?php
       $racb_linkedin  = racb_social('linkedin') ?: 'https://linkedin.com/company/racbconsulting';
