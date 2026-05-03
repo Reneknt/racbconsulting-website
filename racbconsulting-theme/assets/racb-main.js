@@ -109,6 +109,37 @@
     }
   }
 
+  // ===== ADVISOR MODAL =====
+  function openAdvisorModal() {
+    const modal = document.getElementById('advisor-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      requestAnimationFrame(() => modal.classList.add('modal-visible'));
+      document.body.style.overflow = 'hidden';
+    }
+  }
+  function closeAdvisorModal() {
+    const modal = document.getElementById('advisor-modal');
+    if (modal) {
+      modal.classList.remove('modal-visible');
+      setTimeout(() => {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        const form = document.getElementById('advisor-form');
+        const confirmation = document.getElementById('advisor-confirmation');
+        if (form) { form.reset(); form.style.display = ''; }
+        if (confirmation) confirmation.style.display = 'none';
+      }, 300);
+    }
+  }
+  function handleAdvisorForm(e) {
+    e.preventDefault();
+    const form = document.getElementById('advisor-form');
+    const confirmation = document.getElementById('advisor-confirmation');
+    if (form) form.style.display = 'none';
+    if (confirmation) confirmation.style.display = 'block';
+  }
+
   // ===== FORM HANDLER =====
   async function handleForm(e) {
   e.preventDefault();
@@ -793,11 +824,28 @@
   // ===== INIT =====
   initReveal();
 
-  // Close privacy modal on backdrop click
+  // Close modals on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (typeof closeAdvisorModal === 'function') {
+    const advisor = document.getElementById('advisor-modal');
+    if (advisor && advisor.classList.contains('modal-visible')) { closeAdvisorModal(); return; }
+  }
+  if (typeof closePrivacy === 'function') {
+    const privacy = document.getElementById('privacy-modal');
+    if (privacy && privacy.classList.contains('modal-visible')) closePrivacy();
+  }
+});
+
+  // Close modals on backdrop click
 document.addEventListener('click', (e) => {
-  const modal = document.getElementById('privacy-modal');
-  if (modal && e.target === modal && typeof closePrivacy === 'function') {
+  const privacy = document.getElementById('privacy-modal');
+  if (privacy && e.target === privacy && typeof closePrivacy === 'function') {
     closePrivacy();
+  }
+  const advisor = document.getElementById('advisor-modal');
+  if (advisor && e.target === advisor && typeof closeAdvisorModal === 'function') {
+    closeAdvisorModal();
   }
 });
 	// ===== MAKE FUNCTIONS GLOBAL (for inline onclick="...") =====
@@ -809,6 +857,9 @@ document.addEventListener('click', (e) => {
   window.showPrivacy = showPrivacy;
   window.closePrivacy = closePrivacy;
   window.handleForm = handleForm;
+  window.openAdvisorModal = openAdvisorModal;
+  window.closeAdvisorModal = closeAdvisorModal;
+  window.handleAdvisorForm = handleAdvisorForm;
   window.toggleLang = toggleLang;
   window.applyLang = applyLang;
 

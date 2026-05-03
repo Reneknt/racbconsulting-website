@@ -682,8 +682,8 @@ get_header();
                 </p>
 
                 <?php /* TODO: ACF — replace CTA label with get_field('advisor_cta_label', 'option') and URL with get_field('advisor_cta_url', 'option') */ ?>
-                <?php /* TODO: Replace #advisor with the real Private Executive Advisor widget trigger when implemented. */ ?>
-                <a href="#advisor" class="btn-secondary">
+                <?php /* TODO: Replace openAdvisorModal() with the real Private Executive Advisor widget trigger when implemented. */ ?>
+                <a href="#advisor" class="btn-secondary" onclick="openAdvisorModal(); return false;">
                     Start Advisory Conversation
                 </a>
 
@@ -693,5 +693,55 @@ get_header();
     </section>
 
 </main>
+
+<!-- ADVISOR MODAL -->
+<?php /* TODO: Replace this temporary modal with the real Private Executive Advisor widget when implemented. */ ?>
+<div id="advisor-modal" role="dialog" aria-modal="true" aria-labelledby="advisor-modal-title">
+  <div class="advisor-modal-box">
+
+    <button class="advisor-modal-close" onclick="closeAdvisorModal()" aria-label="Close">&#x2715;</button>
+
+    <p class="advisor-modal-label">Private Executive Advisor</p>
+
+    <h3 id="advisor-modal-title" class="advisor-modal-title">
+      Tell us what is happening inside your operation.
+    </h3>
+
+    <p class="advisor-modal-desc">
+      Our Executive Advisory Desk will review it and guide you to the right next step.
+    </p>
+
+    <form id="advisor-form" class="advisor-form" onsubmit="handleAdvisorForm(event)">
+
+      <div class="advisor-field">
+        <label for="advisor-name">Name</label>
+        <input type="text" id="advisor-name" name="name" required placeholder="Your name" />
+      </div>
+
+      <div class="advisor-field">
+        <label for="advisor-company">Company</label>
+        <input type="text" id="advisor-company" name="company" required placeholder="Company name" />
+      </div>
+
+      <div class="advisor-field">
+        <label for="advisor-email">Email</label>
+        <input type="email" id="advisor-email" name="email" required placeholder="your@email.com" />
+      </div>
+
+      <div class="advisor-field">
+        <label for="advisor-problem">Main operational problem</label>
+        <textarea id="advisor-problem" name="problem" required rows="4" placeholder="Describe the main issue you are facing..."></textarea>
+      </div>
+
+      <button type="submit" class="btn-primary advisor-submit">Send Advisory Request</button>
+
+    </form>
+
+    <div id="advisor-confirmation" class="advisor-confirmation" style="display:none;">
+      <p>Your advisory request has been prepared. Please email <a href="mailto:ceo@racbconsulting.com">ceo@racbconsulting.com</a> or book your Executive Diagnostic.</p>
+    </div>
+
+  </div>
+</div>
 
 <?php get_footer(); ?>
