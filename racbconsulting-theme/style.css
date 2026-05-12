@@ -758,7 +758,7 @@ Text Domain: racbconsulting
   .wa-float:hover { transform: scale(1.15); }
 
   /* ===== PAGE SYSTEM ===== */
-  .page { display: none; }
+  div.page { display: none; }
   .page.active { display: block; }
 
   /* ===== TABS ===== */
