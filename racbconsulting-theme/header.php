@@ -19,7 +19,7 @@
       $logo_id = get_theme_mod( 'custom_logo' );
       $logo_img = $logo_id ? wp_get_attachment_image( $logo_id, 'full', false, [ 'alt' => get_bloginfo( 'name' ) ] ) : '';
     ?>
-    <a href="javascript:void(0)" class="logo" onclick="showPage('home')" aria-label="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>">
+    <a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="logo" aria-label="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>">
       <?php if ( $logo_img ) : ?>
         <?php echo $logo_img; ?>
       <?php else : ?>
