@@ -1346,6 +1346,75 @@ Text Domain: racbconsulting
   transform: translateY(-2px);
 }
 
+/* ----- Contact Option Cards (Three Ways to Start) ----- */
+
+.contact-option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  margin-top: 3rem;
+}
+
+.contact-option-card {
+  background: var(--accent-bg);
+  border-radius: 6px;
+  padding: 2.5rem 2rem;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.contact-option-card--featured {
+  background: var(--white);
+  border: 2px solid var(--primary);
+}
+
+.contact-option-card h3 {
+  color: var(--secondary);
+  font-size: clamp(1.15rem, 2vw, 1.42rem);
+  margin-bottom: 0;
+}
+
+.contact-option-card > p {
+  flex: 1;
+  color: var(--text-light);
+}
+
+.contact-option-card .section-label {
+  margin-bottom: 0;
+}
+
+.contact-option-card .btn-secondary,
+.contact-option-card .btn-primary {
+  align-self: flex-start;
+}
+
+/* Dark-ink secondary button — light card sits on dark section */
+.contact-option-card .btn-secondary {
+  color: var(--secondary);
+  border-color: rgba(51,51,51,0.32);
+}
+
+.contact-option-card .btn-secondary:hover {
+  color: var(--text);
+  border-color: var(--secondary);
+  background: rgba(51,51,51,0.06);
+  transform: translateY(-2px);
+}
+
+/* Gradient primary button — default .btn-primary is white-on-white on light card */
+.contact-option-card .btn-primary {
+  background: var(--gradient);
+  color: var(--white);
+  box-shadow: 0 4px 22px rgba(155,47,111,0.28);
+}
+
+.contact-option-card .btn-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 34px rgba(155,47,111,0.44);
+}
+
 
 /* ----- Private Executive Advisor Block ----- */
 
@@ -1410,7 +1479,7 @@ Text Domain: racbconsulting
 }
 
 .advisor-body {
-  color: rgba(255,255,255,0.46);
+  color: rgba(255,255,255,0.55);
   font-size: 0.95rem;
   line-height: 1.85;
   max-width: 580px;
@@ -1480,7 +1549,7 @@ Text Domain: racbconsulting
 .authority-support {
   font-size: 1rem;
   line-height: 1.6;
-  opacity: 0.85;
+  color: rgba(255,255,255,0.62);
 }
 
 /* Diagnostic panel */
@@ -1494,11 +1563,6 @@ Text Domain: racbconsulting
   margin-bottom: 2rem;
 }
 
-.authority-diagnostic p,
-.authority-section .authority-box p {
-  opacity: 0.85;
-}
-
 .authority-diagnostic ul,
 .authority-section .authority-box ul {
   margin-top: 1rem;
@@ -1507,7 +1571,6 @@ Text Domain: racbconsulting
 .authority-diagnostic li,
 .authority-section .authority-box li {
   margin-bottom: 0.5rem;
-  opacity: 0.9;
 }
 
 .authority-diagnostic-intro {
@@ -1546,7 +1609,7 @@ Text Domain: racbconsulting
 }
 
 .authority-diagnostic-close {
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.52);
   font-size: 0.95rem;
   line-height: 1.8;
   border-top: 1px solid rgba(255,255,255,0.06);
@@ -1559,7 +1622,7 @@ Text Domain: racbconsulting
   border: none;
   border-left: 3px solid var(--primary);
   padding: 0.25rem 0 0.25rem 2.5rem;
-  margin: 0 0 4.5rem;
+  margin: 0 0 2.5rem;
 }
 
 .authority-quote p {
@@ -1573,7 +1636,7 @@ Text Domain: racbconsulting
 }
 
 .authority-quote footer {
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.52);
   font-size: 0.9rem;
   font-style: normal;
   line-height: 1.85;
@@ -1586,7 +1649,7 @@ Text Domain: racbconsulting
   border: 1px solid rgba(155,47,111,0.22);
   border-radius: 2px;
   padding: 3rem 3.5rem;
-  margin-bottom: 5rem;
+  margin-bottom: 3rem;
 }
 
 .authority-panel-intro {
@@ -1623,7 +1686,7 @@ Text Domain: racbconsulting
 }
 
 .authority-panel-close {
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.52);
   font-size: 0.9rem;
   font-style: italic;
   line-height: 1.7;
@@ -1634,8 +1697,8 @@ Text Domain: racbconsulting
 /* Closing manifesto */
 .authority-close {
   border-top: 1px solid rgba(255,255,255,0.06);
-  padding-top: 4.5rem;
-  margin-bottom: 4.5rem;
+  padding-top: 3.5rem;
+  margin-bottom: 2.25rem;
 }
 
 .authority-close p {
@@ -2349,6 +2412,10 @@ Text Domain: racbconsulting
   overflow: hidden;
 }
 
+.proof-section .section-label {
+  color: var(--primary-light);
+}
+
 /* Full-width container — 3-col grid needs room */
 /* Header and bottom elements constrained individually */
 
@@ -2368,9 +2435,29 @@ Text Domain: racbconsulting
 }
 
 .proof-lead {
-  color: rgba(255,255,255,0.62);
+  color: rgba(255,255,255,0.72);
   font-size: clamp(1rem, 1.8vw, 1.18rem);
   line-height: 1.85;
+  margin-bottom: 2rem;
+}
+
+.proof-section h2 {
+  color: var(--white);
+}
+
+.proof-section h3 {
+  color: rgba(255,255,255,0.82);
+  font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+  margin-bottom: 2rem;
+}
+
+/* Vertical industry block spacing */
+.proof-vertical {
+  margin-bottom: 3rem;
+}
+
+.proof-vertical .section-label {
+  margin-bottom: 0.5rem;
 }
 
 /* 3-col case study grid */
@@ -2379,6 +2466,13 @@ Text Domain: racbconsulting
   grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
   margin-bottom: 6rem;
+}
+
+/* Single-card layout — constrained width */
+.proof-grid--single {
+  grid-template-columns: 1fr;
+  max-width: 760px;
+  margin-bottom: 0;
 }
 
 /* Case study card shell */
@@ -2398,7 +2492,7 @@ Text Domain: racbconsulting
 /* Vertical / industry label — card header row */
 .proof-card-vertical {
   padding: 1.75rem 2.25rem 1.5rem;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.45);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.68rem;
   font-weight: 700;
@@ -2414,7 +2508,7 @@ Text Domain: racbconsulting
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(255,255,255,0.22);
+  color: rgba(255,255,255,0.32);
   margin-bottom: 1rem;
 }
 
@@ -2435,7 +2529,7 @@ Text Domain: racbconsulting
 }
 
 .proof-problem-list li {
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.52);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.9rem;
   line-height: 1.55;
@@ -2496,7 +2590,7 @@ Text Domain: racbconsulting
   font-family: 'Playfair Display', serif;
   font-size: clamp(1.1rem, 2vw, 1.65rem);
   font-weight: 700;
-  color: rgba(255,255,255,0.28);
+  color: rgba(255,255,255,0.38);
   line-height: 1.45;
   margin-bottom: 0.35rem;
 }
@@ -2523,7 +2617,7 @@ Text Domain: racbconsulting
   font-family: 'Playfair Display', serif;
   font-size: clamp(1.05rem, 1.8vw, 1.45rem);
   font-weight: 600;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.52);
   line-height: 1.5;
   margin-bottom: 0.3rem;
 }
@@ -2711,7 +2805,7 @@ Text Domain: racbconsulting
   }
 
   .authority-section {
-    padding: 5rem 1.5rem;
+    padding: 3rem 1.25rem;
   }
 
   .authority-diagnostic,
@@ -2730,8 +2824,12 @@ Text Domain: racbconsulting
   }
 
   .authority-close {
-    padding-top: 3rem;
-    margin-bottom: 3rem;
+    padding-top: 2.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .proof-vertical {
+    margin-bottom: 2rem;
   }
 
   .authority-cta {

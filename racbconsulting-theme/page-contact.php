@@ -55,26 +55,13 @@ get_header();
                 Choose the channel that matches where you are in the decision.
             </p>
 
-            <div style="
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                gap: 2rem;
-                margin-top: 3rem;
-            ">
+            <div class="contact-option-grid">
 
                 <!-- Option 1: Advisor Chat -->
-                <div style="
-                    background: var(--accent-bg);
-                    border-radius: 16px;
-                    padding: 2.5rem 2rem;
-                    border: 1px solid var(--border);
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1.25rem;
-                ">
-                    <p class="section-label" style="margin-bottom: 0;">Executive Advisory Desk</p>
-                    <h3 style="color: var(--secondary);">Speak With an Advisor</h3>
-                    <p style="flex: 1;">
+                <div class="contact-option-card">
+                    <p class="section-label">Executive Advisory Desk</p>
+                    <h3>Speak With an Advisor</h3>
+                    <p>
                         Not sure where to start? Our Executive Advisor helps you identify
                         whether the problem is lead response, scheduling, follow-up, or hidden
                         operational failure — before you book anything.
@@ -83,25 +70,16 @@ get_header();
                         href="#advisor"
                         class="btn-secondary"
                         onclick="openAdvisorModal(); return false;"
-                        style="align-self: flex-start;"
                     >
                         Start Advisory Conversation
                     </a>
                 </div>
 
-                <!-- Option 2: Book Diagnostic -->
-                <div style="
-                    background: var(--white);
-                    border-radius: 16px;
-                    padding: 2.5rem 2rem;
-                    border: 2px solid var(--primary);
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1.25rem;
-                ">
-                    <p class="section-label" style="margin-bottom: 0;">Fastest Path</p>
-                    <h3 style="color: var(--secondary);">Book Executive Diagnostic</h3>
-                    <p style="flex: 1;">
+                <!-- Option 2: Book Diagnostic — featured -->
+                <div class="contact-option-card contact-option-card--featured">
+                    <p class="section-label">Fastest Path</p>
+                    <h3>Book Executive Diagnostic</h3>
+                    <p>
                         Ready to diagnose? Qualified companies are currently receiving the Initial
                         Executive Diagnostic at no cost. This is a structured operational review —
                         not a sales call.
@@ -111,32 +89,22 @@ get_header();
                         class="btn-primary"
                         target="_blank"
                         rel="noopener"
-                        style="align-self: flex-start;"
                     >
                         Book Executive Diagnostic
                     </a>
                 </div>
 
                 <!-- Option 3: Direct Email -->
-                <div style="
-                    background: var(--accent-bg);
-                    border-radius: 16px;
-                    padding: 2.5rem 2rem;
-                    border: 1px solid var(--border);
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1.25rem;
-                ">
-                    <p class="section-label" style="margin-bottom: 0;">Direct Line</p>
-                    <h3 style="color: var(--secondary);">Email the Executive Team</h3>
-                    <p style="flex: 1;">
+                <div class="contact-option-card">
+                    <p class="section-label">Direct Line</p>
+                    <h3>Email the Executive Team</h3>
+                    <p>
                         For specific inquiries, partnership discussions, or anything that does not
                         fit a diagnostic conversation, reach the executive team directly.
                     </p>
                     <a
                         href="mailto:ceo@racbconsulting.com"
                         class="btn-secondary"
-                        style="align-self: flex-start;"
                     >
                         ceo@racbconsulting.com
                     </a>
@@ -149,7 +117,7 @@ get_header();
 
 
     <!-- WHAT TO EXPECT -->
-    <section style="padding: 6rem 2rem; background: var(--accent-bg);" aria-labelledby="expect-headline">
+    <section class="authority-section" aria-labelledby="expect-headline">
         <div class="container">
 
             <p class="section-label">What to Expect</p>
@@ -179,7 +147,7 @@ get_header();
 
             </div>
 
-            <div class="authority-close" aria-label="Contact positioning statement" style="margin-top: 3rem;">
+            <div class="authority-close" aria-label="Contact positioning statement">
                 <p>We do not sell tools.</p>
                 <p>We do not run generic demos.</p>
                 <p>We identify what is actually broken.</p>

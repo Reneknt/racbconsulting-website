@@ -92,7 +92,7 @@ get_header();
 
 
     <!-- THE FIRM -->
-    <section id="the-firm" aria-labelledby="firm-headline" style="background: var(--accent-bg); padding: 6rem 2rem;">
+    <section id="the-firm" class="authority-section" aria-labelledby="firm-headline">
         <div class="container">
 
             <p class="section-label">The Firm</p>
@@ -143,7 +143,7 @@ get_header();
 
 
     <!-- WHAT WE DO -->
-    <section aria-labelledby="what-headline" style="padding: 6rem 2rem;">
+    <section class="authority-section" aria-labelledby="what-headline">
         <div class="container">
 
             <p class="section-label">What We Do</p>

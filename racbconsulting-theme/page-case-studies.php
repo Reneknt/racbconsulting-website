@@ -85,7 +85,7 @@ get_header();
 
 
     <!-- PROOF CASES -->
-    <section class="proof-section" id="proof" aria-labelledby="proof-headline" style="padding: 6rem 2rem;">
+    <section class="proof-section" id="proof" aria-labelledby="proof-headline">
         <div class="container">
 
             <p class="section-label">Executive Proof</p>
@@ -99,14 +99,12 @@ get_header();
 
 
             <!-- VERTICAL: CONTRACTORS -->
-            <div style="margin-bottom: 5rem;">
+            <div class="proof-vertical">
 
-                <p class="section-label" style="margin-bottom: 0.5rem;">Vertical — Contractors</p>
-                <h3 style="color: var(--secondary); margin-bottom: 2rem; font-size: clamp(1.3rem, 2.5vw, 1.8rem);">
-                    HVAC, Plumbing, Electrical, Roofing, General Contractors
-                </h3>
+                <p class="section-label">Vertical — Contractors</p>
+                <h3>HVAC, Plumbing, Electrical, Roofing, General Contractors</h3>
 
-                <div class="proof-grid">
+                <div class="proof-grid proof-grid--single">
                     <article class="proof-card">
                         <p class="proof-card-vertical">Contractor Operations</p>
                         <div class="proof-card-problem">
@@ -135,14 +133,12 @@ get_header();
 
 
             <!-- VERTICAL: MULTIFAMILY -->
-            <div style="margin-bottom: 5rem;">
+            <div class="proof-vertical">
 
-                <p class="section-label" style="margin-bottom: 0.5rem;">Vertical — Multifamily Operations</p>
-                <h3 style="color: var(--secondary); margin-bottom: 2rem; font-size: clamp(1.3rem, 2.5vw, 1.8rem);">
-                    Property Management, Maintenance Operations, Vendor Coordination
-                </h3>
+                <p class="section-label">Vertical — Multifamily Operations</p>
+                <h3>Property Management, Maintenance Operations, Vendor Coordination</h3>
 
-                <div class="proof-grid">
+                <div class="proof-grid proof-grid--single">
                     <article class="proof-card">
                         <p class="proof-card-vertical">Multifamily Operations</p>
                         <div class="proof-card-problem">
@@ -171,14 +167,12 @@ get_header();
 
 
             <!-- VERTICAL: SERVICE BUSINESSES -->
-            <div style="margin-bottom: 4rem;">
+            <div class="proof-vertical">
 
-                <p class="section-label" style="margin-bottom: 0.5rem;">Vertical — Service Businesses</p>
-                <h3 style="color: var(--secondary); margin-bottom: 2rem; font-size: clamp(1.3rem, 2.5vw, 1.8rem);">
-                    Professional Services, Medical, Legal, Home Services
-                </h3>
+                <p class="section-label">Vertical — Service Businesses</p>
+                <h3>Professional Services, Medical, Legal, Home Services</h3>
 
-                <div class="proof-grid">
+                <div class="proof-grid proof-grid--single">
                     <article class="proof-card">
                         <p class="proof-card-vertical">Service Business Operations</p>
                         <div class="proof-card-problem">
