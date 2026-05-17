@@ -943,6 +943,184 @@ function racb_get_advisor_persona() {
 }
 
 /* ============================================================
+   Capture Governance — deterministic sanity-check after LLM
+   ============================================================ */
+function racb_apply_capture_governance( $user_message, $should_capture, $capture_mode, $exchange_num ) {
+    $msg    = strtolower( trim( $user_message ) );
+    $reason = 'llm_accepted';
+
+    // ── 1. Explicit resurface intent (check before early-exchange guard) ────────
+    $resurface_signals = array(
+        'dónde completo', 'donde completo',
+        'dónde pongo mis datos', 'donde pongo mis datos',
+        'mándame el formulario', 'mandame el formulario',
+        'envíame el formulario', 'enviame el formulario',
+        'pasa el formulario',
+        'quiero completar',
+        'where do i fill this out',
+        'send me the form',
+        'form please',
+    );
+    $is_resurface = false;
+    foreach ( $resurface_signals as $s ) {
+        if ( strpos( $msg, $s ) !== false ) { $is_resurface = true; break; }
+    }
+    if ( $is_resurface ) {
+        $resolved_mode = in_array( $capture_mode, array( 'now', 'followup' ), true ) ? $capture_mode : 'followup';
+        return array( 'should_capture' => true, 'capture_mode' => $resolved_mode, 'reason' => 'resurface_intent' );
+    }
+
+    // ── 2. Explicit now intent ──────────────────────────────────────────────────
+    $now_signals = array(
+        'sí hagámoslo', 'si hagamoslo',
+        'hagámoslo ahora', 'hagamoslo ahora',
+        'adelante',
+        'empecemos',
+        'quiero hacerlo ahora',
+        'vamos',
+        'ok hagámoslo', 'ok hagamoslo',
+        'yes let\'s do it',
+        'let\'s do it now',
+        'let\'s start',
+        'i\'m in',
+        'go ahead',
+    );
+    foreach ( $now_signals as $s ) {
+        if ( strpos( $msg, $s ) !== false ) {
+            return array( 'should_capture' => true, 'capture_mode' => 'now', 'reason' => 'explicit_now' );
+        }
+    }
+
+    // ── 3. Explicit followup intent ─────────────────────────────────────────────
+    $followup_signals = array(
+        'ahora no tengo tiempo',
+        'no puedo ahora',
+        'mejor luego',
+        'otro día', 'otro dia',
+        'mañana', 'manana',
+        'la semana que viene',
+        'quiero agendar',
+        'déjame mis datos', 'dejame mis datos',
+        'tomar mis datos',
+        'coordinar después', 'coordinar despues',
+        'not now',
+        'later',
+        'tomorrow',
+        'next week',
+        'schedule later',
+        'coordinate later',
+        'leave my details',
+    );
+    foreach ( $followup_signals as $s ) {
+        if ( strpos( $msg, $s ) !== false ) {
+            return array( 'should_capture' => true, 'capture_mode' => 'followup', 'reason' => 'explicit_followup' );
+        }
+    }
+
+    // ── 4. Early exchange guard (after explicit signals so they can override) ──
+    if ( $exchange_num < 3 && $should_capture ) {
+        return array( 'should_capture' => false, 'capture_mode' => null, 'reason' => 'early_exchange_guard' );
+    }
+
+    // ── 5. Ambiguous intent guard ───────────────────────────────────────────────
+    $ambiguous_signals = array(
+        'cómo sería', 'como seria',
+        'cómo funciona', 'como funciona',
+        'qué sigue', 'que sigue',
+        'cómo podemos hacer entonces', 'como podemos hacer entonces',
+        'cuéntame más', 'cuentame mas',
+        'explícame', 'explicame',
+        'what would be next',
+        'how does it work',
+        'what happens next',
+        'tell me more',
+        'explain',
+    );
+    foreach ( $ambiguous_signals as $s ) {
+        if ( strpos( $msg, $s ) !== false && $should_capture ) {
+            return array( 'should_capture' => false, 'capture_mode' => null, 'reason' => 'ambiguous_intent_guard' );
+        }
+    }
+
+    // ── 6. Consistency guard ────────────────────────────────────────────────────
+    if ( $should_capture && ! in_array( $capture_mode, array( 'now', 'followup' ), true ) ) {
+        $capture_mode = 'followup';
+        $reason       = 'consistency_guard_mode_missing';
+    }
+    if ( ! $should_capture ) {
+        $capture_mode = null;
+    }
+
+    return array( 'should_capture' => $should_capture, 'capture_mode' => $capture_mode, 'reason' => $reason );
+}
+
+/* ============================================================
+   Language Governance — post-LLM drift detection
+   ============================================================ */
+function racb_apply_language_governance( $reply, $dominant_language, $advisor_name ) {
+    $trimmed = trim( $reply );
+
+    // Too short to have reliable signal — pass through untouched
+    if ( mb_strlen( $trimmed ) < 40 ) {
+        return array( 'reply' => $reply, 'reason' => 'clean' );
+    }
+
+    $lower = strtolower( $trimmed );
+
+    $en_signals = array(
+        'absolutely', 'let me', 'no problem at all', 'we can', 'would you like',
+        'thanks for', 'sounds good', 'i can help', 'we will', 'see you',
+        'booked', 'follow up', 'great question', 'that makes sense',
+        'i understand', 'you mentioned',
+    );
+    $es_signals = array(
+        'perfecto', 'claro', 'sin problema', 'podemos', 'quieres',
+        'gracias por', 'excelente', 'suena bien', 'te ayudo', 'estaremos',
+        'nos vemos', 'agendado', 'seguimiento', 'lo que me comentas',
+        'lo que mencionas', 'entiendo',
+    );
+
+    $en_hits = 0;
+    $es_hits = 0;
+    foreach ( $en_signals as $s ) {
+        if ( strpos( $lower, $s ) !== false ) $en_hits++;
+    }
+    foreach ( $es_signals as $s ) {
+        if ( strpos( $lower, $s ) !== false ) $es_hits++;
+    }
+
+    // Drift is only flagged when the evidence is clear and unambiguous
+    $en_drift = ( $dominant_language === 'es' && $en_hits >= 2 && $en_hits > $es_hits );
+    $es_drift = ( $dominant_language === 'en' && $es_hits >= 2 && $es_hits > $en_hits );
+
+    if ( $en_drift ) {
+        $fallbacks = array(
+            'Perfecto. Continuemos en español para que todo quede claro.',
+            'Claro. Sigamos revisándolo juntos.',
+            'Entendido. Seguimos en español desde aquí.',
+        );
+        return array(
+            'reply'  => $fallbacks[ abs( crc32( $reply ) ) % count( $fallbacks ) ],
+            'reason' => 'spanish_drift_detected',
+        );
+    }
+
+    if ( $es_drift ) {
+        $fallbacks = array(
+            "Absolutely. Let's continue in English so everything stays clear.",
+            "Of course. Let's keep going step by step.",
+            "Got it. We'll carry on from here in English.",
+        );
+        return array(
+            'reply'  => $fallbacks[ abs( crc32( $reply ) ) % count( $fallbacks ) ],
+            'reason' => 'english_drift_detected',
+        );
+    }
+
+    return array( 'reply' => $reply, 'reason' => 'clean' );
+}
+
+/* ============================================================
    Executive Advisor — OpenAI Chat Endpoint
    ============================================================ */
 function racb_handle_advisor_chat() {
@@ -1058,7 +1236,7 @@ LANGUAGE: All replies in {$lang_name} only. 2–4 sentences per reply. One quest
 
 RESPONSE FORMAT: Valid JSON only. No text before or after. No markdown. No code fences.
 
-{\"reply\":\"...\",\"should_capture\":false,\"intent_type\":\"unknown\",\"suggested_next_step\":\"continue\",\"extracted_name\":null}
+{\"reply\":\"...\",\"should_capture\":false,\"capture_mode\":null,\"intent_type\":\"unknown\",\"suggested_next_step\":\"continue\",\"extracted_name\":null}
 
 ---
 
@@ -1193,33 +1371,40 @@ Stage 4B — Time Objection: user is busy or unavailable → shift to follow-up 
 Stage 4C — Soft Exit: user declines → close warmly, leave door open.
 
 PRIMARY CLOSE RULE:
-Once diagnostic relevance is established, offer the diagnostic immediately and directly before offering scheduling or follow-up.
-- Spanish: \"¿Te gustaría que hagamos esa revisión inicial ahora mismo?\" or \"Si quieres, podemos avanzar ahora mismo con el diagnóstico inicial.\" Adapt — never copy verbatim.
-- English: \"Would you like to go through that initial review now?\" or \"If you would like, we can move forward with the initial diagnostic now.\" Adapt — never copy verbatim.
+Once diagnostic relevance is established, present a clear binary branch — do NOT assume which path the user prefers:
+- Spanish: \"¿Quieres hacer esa revisión inicial ahora mismo, o prefieres que tomemos tus datos para coordinarla en otro momento?\" Adapt — never copy verbatim.
+- English: \"Would you like to go through that initial review now, or would you prefer us to take your details and coordinate it for another time?\" Adapt — never copy verbatim.
+Do NOT set should_capture here. Wait for the user's explicit response to this branch question.
+
+AMBIGUOUS INTENT RULE:
+The following phrases are NOT explicit consent and must NOT trigger should_capture:
+- \"cómo podemos hacer entonces\", \"cómo sería\", \"qué sigue\", \"cuéntame más\", \"cómo funciona\"
+- \"what would be next\", \"how does it work\", \"what happens next\", \"tell me more\"
+- Any expression of curiosity, interest, or process questions without a clear choice.
+When you hear these, respond with explanation and then re-ask the branch question. Do not set should_capture.
 
 TIME OBJECTION RULE:
-If the user expresses lack of time, being busy, needing another day, or scheduling constraints:
-- Acknowledge it without pressure.
-- Shift objective: the goal becomes securing complete lead information through the form so the Advisory Desk can follow up correctly.
-- Set should_capture to true to surface the form.
-- Do NOT continue broad discovery. Do NOT restart operational questions.
-- Spanish example: \"Sin problema. Entonces déjame tomar tus datos para que el equipo te contacte en el momento que sea mejor para ti.\"
-- English example: \"No problem at all. Let me make sure we have your details so the Advisory Desk can follow up at a time that works for you.\"
+If the user expresses lack of time, being busy, needing another day, or scheduling constraints — signals include: \"ahora no tengo tiempo\", \"luego\", \"mañana\", \"otro día\", \"el jueves\", \"when can we do it\", \"schedule later\", \"not now\":
+- Acknowledge without pressure.
+- Set should_capture to true — the form captures details for follow-up.
+- Do NOT continue discovery. Do NOT restart operational questions.
+- Spanish: \"Sin problema. Déjame tomar tus datos para que el equipo te contacte en el momento que sea mejor para ti.\" Adapt.
+- English: \"No problem at all. Let me make sure we have your details so the Advisory Desk can follow up at a time that works for you.\" Adapt.
 
 CAPTURE COMPLETION RULE:
-If the user has agreed to the diagnostic or to being followed up, but the form has not yet been submitted:
-- Gently direct toward completing the form.
-- Do NOT claim the meeting is booked.
-- Do NOT promise reminders, calendar invites, or scheduling confirmations that do not exist yet.
-- Do NOT simulate operational actions — nothing is confirmed until the form is submitted.
-- Correct: \"Perfecto. Quiero asegurarme de que tengamos tus datos bien para encaminar el diagnóstico correctamente.\"
-- Correct: \"Perfect. Let me get a few details from you so we can route this correctly.\"
-- Incorrect: \"I booked the meeting for Thursday.\" / \"You will receive a reminder.\" / \"See you then.\"
+If the user has agreed or selected a path but the form has not been submitted:
+- Direct gently toward completing the form with: \"Completa tus datos en el formulario y desde ahí seguimos.\" / \"Complete your details in the form and we'll continue from there.\"
+- Do NOT claim the meeting is booked, confirmed, or scheduled.
+- Do NOT promise reminders, calendar invites, or follow-up calls.
+- Do NOT simulate any operational action — nothing is real until the form is submitted.
+- These phrases are FORBIDDEN: \"he reservado\", \"I booked\", \"te enviaré recordatorio\", \"calendar invite\", \"see you Thursday\", \"quedamos el\", \"te llamo el\".
+
+RE-SURFACE RULE:
+If the user says \"ok\", \"perfecto\", \"sí\", \"dónde completo\", \"mándame el formulario\", \"quiero agendar\", \"¿cómo sigo?\", \"where do I fill this\", or any similar confirmation after diagnostic relevance is established — even if a form was already shown — set should_capture to true so the form is surfaced or scrolled into view again.
 
 SOFT EXIT RULE:
 If the user declines politely or is clearly not ready:
-- Close warmly. Do not pressure.
-- Remain consultative. Leave the door open naturally.
+- Close warmly. Do not pressure. Leave the door open naturally.
 - Spanish: \"Perfecto, no hay problema. Si más adelante quieres revisar la operación con más profundidad, aquí estaremos.\" Adapt.
 - English: \"Absolutely no problem. If you ever want to revisit the operational side more deeply, we will be here.\" Adapt.
 
@@ -1269,11 +1454,19 @@ Think of this as context you need, not fields to fill. Gather it through the con
 CTA PSYCHOLOGY:
 This is exchange number {$exchange_num} in the conversation.
 
+should_capture and capture_mode rules:
+
+capture_mode values:
+- \"now\"      — user accepts doing the diagnostic immediately. Examples: \"sí, hagámoslo\", \"adelante\", \"empecemos\", \"I'm in\", \"let's do it now\", \"yes, let's start\".
+- \"followup\" — user wants to leave details for coordination later, or expresses lack of time. Examples: \"ahora no puedo\", \"luego\", \"mañana\", \"otro día\", \"schedule later\", \"not now\", \"quiero agendar\", \"coordinate later\".
+- null        — no capture intent, or intent is still ambiguous. Use this whenever should_capture is false.
+
 should_capture rules:
-- Set to true when: the user clearly and explicitly agrees to proceed now — \"yes let's do it\", \"I'm in\", \"let's schedule\", \"claro\", \"sí, adelante\", \"cuándo empezamos\", \"how do we start\".
-- ALSO set to true when: the user expresses a time objection (busy, no time now, schedule later) — capture their details for follow-up.
-- NEVER set true for: greetings, exchanges 1 or 2, vague exploration, tool questions, asking about price, asking about the diagnostic in general, or expressing interest without explicit agreement or time objection.
-- If operational pain has been clearly described and this is exchange 3 or later, first offer the diagnostic immediately (Primary Close). Only if the user responds with agreement or a time objection should you set should_capture true.
+- Set to true + capture_mode=\"now\" when: user clearly and explicitly agrees to proceed immediately — \"yes let's do it\", \"I'm in\", \"let's schedule\", \"claro\", \"sí, adelante\", \"cuándo empezamos\", \"how do we start\".
+- Set to true + capture_mode=\"followup\" when: user expresses time objection (busy, no time now, schedule later) — capture their details for follow-up.
+- NEVER set should_capture true for: greetings, exchanges 1 or 2, vague exploration, tool questions, asking about price, asking about the diagnostic in general, or expressing interest without explicit agreement or time objection.
+- If operational pain has been clearly described and this is exchange 3 or later, first offer the diagnostic (Primary Close). Only if the user responds with agreement or time objection should you set should_capture true.
+- Ambiguous phrases — \"cómo sería\", \"qué sigue\", \"cómo funciona\", \"tell me more\", \"what would be next\" — are NOT consent. Keep should_capture false and capture_mode null. Re-ask the branch question.
 
 Consent question — ask this naturally when pain is established and the moment feels right:
 - English: \"Would you be open to doing that initial diagnostic at no cost so we can help identify where operational leakage or friction may exist?\" Adapt — never copy verbatim.
@@ -1407,6 +1600,18 @@ HARD RULES:
     $final_reply    = sanitize_text_field($parsed['reply']);
     $final_intent   = in_array($parsed['intent_type'] ?? '', $allowed_intents, true) ? $parsed['intent_type'] : 'unknown';
     $should_capture = !empty($parsed['should_capture']);
+    $raw_capture_mode = $parsed['capture_mode'] ?? null;
+    $capture_mode     = in_array($raw_capture_mode, array('now', 'followup'), true) ? $raw_capture_mode : null;
+
+    // ── DETERMINISTIC CAPTURE GOVERNANCE ──────────────────────────────────────
+    $capture_gov  = racb_apply_capture_governance($message, $should_capture, $capture_mode, $exchange_num);
+    $should_capture = $capture_gov['should_capture'];
+    $capture_mode   = $capture_gov['capture_mode'];
+
+    // ── LANGUAGE GOVERNANCE ────────────────────────────────────────────────────
+    $lang_gov    = racb_apply_language_governance($final_reply, $lang, $advisor_name);
+    $final_reply = $lang_gov['reply'];
+
     $response_ms    = (int) round((microtime(true) - $request_start) * 1000);
 
     // ── GOVERNANCE SCORING + LOGGING ───────────────────────────────────────────
@@ -1440,8 +1645,10 @@ HARD RULES:
         'high_value_lead'  => $gov_signals['high_value_lead'],
         'lead_quality'     => $lead_quality,
         'openai_status'    => 'success',
-        'response_time_ms' => $response_ms,
-        'page_url'         => $page_url,
+        'response_time_ms'        => $response_ms,
+        'page_url'                => $page_url,
+        'capture_governance_reason'  => $capture_gov['reason'],
+        'language_governance_reason' => $lang_gov['reason'],
     );
     racb_governance_log($gov_entry);
     racb_send_governance_alert($gov_entry, $governance);
@@ -1449,6 +1656,7 @@ HARD RULES:
     wp_send_json_success(array(
         'reply'               => $final_reply,
         'should_capture'      => $should_capture,
+        'capture_mode'        => $capture_mode,
         'intent_type'         => $final_intent,
         'suggested_next_step' => in_array($parsed['suggested_next_step'] ?? '', $allowed_steps, true) ? $parsed['suggested_next_step'] : 'continue',
         'extracted_name'      => $extracted_name,

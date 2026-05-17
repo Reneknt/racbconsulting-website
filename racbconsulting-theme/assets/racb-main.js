@@ -117,7 +117,9 @@
     firstMessage: '',
     quickPromptUsed: false,
     captureShown: false,
+    captureRendering: false,
     submitted: false,
+    captureMode: null,
     messageCount: 0,
     intentType: '',
     conversationSummary: '',
@@ -180,7 +182,9 @@
     advisorState.firstMessage        = '';
     advisorState.quickPromptUsed     = false;
     advisorState.captureShown        = false;
+    advisorState.captureRendering    = false;
     advisorState.submitted           = false;
+    advisorState.captureMode         = null;
     advisorState.messageCount        = 0;
     advisorState.intentType          = '';
     advisorState.conversationSummary = '';
@@ -375,6 +379,33 @@
     if (input && !input.disabled) input.focus();
   }
 
+  function focusExistingAdvisorCaptureForm() {
+    var form = document.querySelector('.advisor-capture-form');
+    if (!form) return;
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(function() {
+      var inputs = form.querySelectorAll('input:not([type="hidden"]):not([disabled]), select, textarea');
+      var target = null;
+      for (var i = 0; i < inputs.length; i++) {
+        if (!inputs[i].value) { target = inputs[i]; break; }
+      }
+      if (!target && inputs.length) target = inputs[0];
+      if (target) target.focus();
+    }, 300);
+  }
+
+  function surfaceAdvisorCaptureForm() {
+    if (advisorState.submitted) return;
+    if (document.querySelector('.advisor-capture-form')) {
+      advisorState.captureShown = true;
+      focusExistingAdvisorCaptureForm();
+      return;
+    }
+    if (advisorState.captureRendering) return;
+    advisorState.captureShown = true;
+    renderAdvisorCaptureForm();
+  }
+
   function appendAdvisorBubble(text) {
     var history = document.getElementById('advisor-chat-history');
     if (!history) return;
@@ -438,73 +469,87 @@
   }
 
   function renderAdvisorCaptureForm() {
-    var t = translations[currentLang];
-    var history = document.getElementById('advisor-chat-history');
-    if (!history) return;
-
-    var wrap = document.createElement('div');
-    wrap.className = 'advisor-msg advisor-msg--assistant';
-    wrap.id = 'advisor-capture-wrap';
-    wrap.style.maxWidth = '100%';
-
-    var form = document.createElement('div');
-    form.className = 'advisor-capture-form';
-
-    form.appendChild(buildAdvisorField('advisor-capture-name', 'text',
-      t['advisor-name-label'] || 'Name',
-      t['advisor-name-ph']    || 'Your name',
-      'name'));
-    form.appendChild(buildAdvisorField('advisor-capture-email', 'email',
-      t['advisor-email-label'] || 'Email',
-      t['advisor-email-ph']    || 'you@company.com',
-      'email'));
-    form.appendChild(buildAdvisorSelect('advisor-capture-btype',
-      t['advisor-btype-label'] || 'Business type', [
-        { value: '',            label: t['advisor-btype-opt0']        || 'Select...' },
-        { value: 'contractor',  label: t['advisor-btype-contractor']  || 'Contractor (HVAC, Plumbing, Electrical, Roofing)' },
-        { value: 'multifamily', label: t['advisor-btype-multifamily'] || 'Multifamily Operations' },
-        { value: 'service',     label: t['advisor-btype-service']     || 'Service Business' },
-        { value: 'other',       label: t['advisor-btype-other']       || 'Other' }
-      ]));
-    form.appendChild(buildAdvisorSelect('advisor-capture-urgency',
-      t['advisor-urgency-label'] || 'Urgency', [
-        { value: '',             label: t['advisor-urgency-opt0']       || 'Select...' },
-        { value: 'immediate',    label: t['advisor-urgency-immediate']  || 'I need to resolve this now' },
-        { value: 'within_month', label: t['advisor-urgency-month']      || 'Within the next month' },
-        { value: 'exploring',    label: t['advisor-urgency-exploring']  || 'Exploring options' }
-      ]));
-
-    var hp = document.createElement('input');
-    hp.type = 'text';
-    hp.id = 'advisor-hp';
-    hp.style.cssText = 'position:absolute;left:-9999px;opacity:0;pointer-events:none;';
-    hp.tabIndex = -1;
-    hp.setAttribute('autocomplete', 'off');
-    form.appendChild(hp);
-
-    var errEl = document.createElement('p');
-    errEl.id = 'advisor-capture-error';
-    errEl.className = 'advisor-capture-error';
-    errEl.style.display = 'none';
-    form.appendChild(errEl);
-
-    var submitBtn = document.createElement('button');
-    submitBtn.type = 'button';
-    submitBtn.id = 'advisor-capture-submit';
-    submitBtn.className = 'advisor-capture-submit';
-    submitBtn.textContent = t['advisor-submit'] || 'Send to Advisory Desk';
-    submitBtn.addEventListener('click', submitAdvisorForm);
-    form.appendChild(submitBtn);
-
-    wrap.appendChild(form);
-    history.appendChild(wrap);
-
-    if (advisorState.userName) {
-      var nameInput = document.getElementById('advisor-capture-name');
-      if (nameInput) nameInput.value = advisorState.userName;
+    if (advisorState.submitted) return;
+    if (advisorState.captureRendering) return;
+    if (document.querySelector('.advisor-capture-form')) {
+      advisorState.captureShown = true;
+      focusExistingAdvisorCaptureForm();
+      return;
     }
 
-    scrollAdvisorHistory();
+    advisorState.captureRendering = true;
+    try {
+      var t = translations[currentLang];
+      var history = document.getElementById('advisor-chat-history');
+      if (!history) return;
+
+      var wrap = document.createElement('div');
+      wrap.className = 'advisor-msg advisor-msg--assistant';
+      wrap.id = 'advisor-capture-wrap';
+      wrap.style.maxWidth = '100%';
+
+      var form = document.createElement('div');
+      form.className = 'advisor-capture-form';
+
+      form.appendChild(buildAdvisorField('advisor-capture-name', 'text',
+        t['advisor-name-label'] || 'Name',
+        t['advisor-name-ph']    || 'Your name',
+        'name'));
+      form.appendChild(buildAdvisorField('advisor-capture-email', 'email',
+        t['advisor-email-label'] || 'Email',
+        t['advisor-email-ph']    || 'you@company.com',
+        'email'));
+      form.appendChild(buildAdvisorSelect('advisor-capture-btype',
+        t['advisor-btype-label'] || 'Business type', [
+          { value: '',            label: t['advisor-btype-opt0']        || 'Select...' },
+          { value: 'contractor',  label: t['advisor-btype-contractor']  || 'Contractor (HVAC, Plumbing, Electrical, Roofing)' },
+          { value: 'multifamily', label: t['advisor-btype-multifamily'] || 'Multifamily Operations' },
+          { value: 'service',     label: t['advisor-btype-service']     || 'Service Business' },
+          { value: 'other',       label: t['advisor-btype-other']       || 'Other' }
+        ]));
+      form.appendChild(buildAdvisorSelect('advisor-capture-urgency',
+        t['advisor-urgency-label'] || 'Urgency', [
+          { value: '',             label: t['advisor-urgency-opt0']       || 'Select...' },
+          { value: 'immediate',    label: t['advisor-urgency-immediate']  || 'I need to resolve this now' },
+          { value: 'within_month', label: t['advisor-urgency-month']      || 'Within the next month' },
+          { value: 'exploring',    label: t['advisor-urgency-exploring']  || 'Exploring options' }
+        ]));
+
+      var hp = document.createElement('input');
+      hp.type = 'text';
+      hp.id = 'advisor-hp';
+      hp.style.cssText = 'position:absolute;left:-9999px;opacity:0;pointer-events:none;';
+      hp.tabIndex = -1;
+      hp.setAttribute('autocomplete', 'off');
+      form.appendChild(hp);
+
+      var errEl = document.createElement('p');
+      errEl.id = 'advisor-capture-error';
+      errEl.className = 'advisor-capture-error';
+      errEl.style.display = 'none';
+      form.appendChild(errEl);
+
+      var submitBtn = document.createElement('button');
+      submitBtn.type = 'button';
+      submitBtn.id = 'advisor-capture-submit';
+      submitBtn.className = 'advisor-capture-submit';
+      submitBtn.textContent = t['advisor-submit'] || 'Send to Advisory Desk';
+      submitBtn.addEventListener('click', submitAdvisorForm);
+      form.appendChild(submitBtn);
+
+      wrap.appendChild(form);
+      history.appendChild(wrap);
+
+      if (advisorState.userName) {
+        var nameInput = document.getElementById('advisor-capture-name');
+        if (nameInput) nameInput.value = advisorState.userName;
+      }
+
+      scrollAdvisorHistory();
+      advisorState.captureShown = true;
+    } finally {
+      advisorState.captureRendering = false;
+    }
   }
 
   function buildAdvisorField(id, type, labelText, placeholder, autocomplete) {
@@ -696,6 +741,10 @@
 
       if (data.intent_type) advisorState.intentType = data.intent_type;
 
+      if (data.capture_mode === 'now' || data.capture_mode === 'followup') {
+        advisorState.captureMode = data.capture_mode;
+      }
+
       if (data.extracted_name && !advisorState.userName) {
         advisorState.userName = data.extracted_name;
       }
@@ -705,18 +754,17 @@
       }
 
       appendAdvisorBubble(data.reply);
-      setTimeout(focusAdvisorInput, 50);
 
-      var captureAllowed = data.should_capture &&
-                           advisorState.messageCount >= 2 &&
-                           !advisorState.captureShown &&
-                           !advisorState.submitted;
-      if (captureAllowed) {
-        advisorState.captureShown = true;
-        setTimeout(renderAdvisorCaptureForm, 500);
-      } else if (advisorState.messageCount === 1 && !data.should_capture &&
-                 advisorState.intentType === 'greeting') {
-        setTimeout(renderAdvisorRoutingButtons, 350);
+      if (data.should_capture && advisorState.messageCount >= 2 && !advisorState.submitted) {
+        // Surface form (render first time, or scroll into view if already rendered)
+        setTimeout(surfaceAdvisorCaptureForm, 500);
+      } else {
+        // No form action — return focus to chat input
+        setTimeout(focusAdvisorInput, 50);
+        if (advisorState.messageCount === 1 && !data.should_capture &&
+            advisorState.intentType === 'greeting') {
+          setTimeout(renderAdvisorRoutingButtons, 350);
+        }
       }
     })
     .catch(function() {
