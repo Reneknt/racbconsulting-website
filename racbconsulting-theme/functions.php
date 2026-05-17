@@ -958,7 +958,7 @@ function racb_handle_advisor_chat() {
     );
     $rl_key = 'racb_chat_rl_' . md5($ip);
     $hits   = (int) get_transient($rl_key);
-    if ($hits >= 20) {
+    if ($hits >= 60) {
         wp_send_json_error(array('message' => 'rate_limit'), 429);
     }
     set_transient($rl_key, $hits + 1, 15 * MINUTE_IN_SECONDS);
