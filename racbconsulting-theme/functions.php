@@ -1232,8 +1232,12 @@ HARD RULES:
             'Content-Type'  => 'application/json',
         ),
         'body' => wp_json_encode(array(
-            'model'    => $model,
-            'messages' => $messages,
+            'model'           => $model,
+            'messages'        => $messages,
+            'temperature'     => 0.4,
+            'response_format' => array(
+                'type' => 'json_object',
+            ),
         )),
     ));
 
