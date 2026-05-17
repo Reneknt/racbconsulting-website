@@ -370,6 +370,11 @@
     return false;
   }
 
+  function focusAdvisorInput() {
+    var input = document.getElementById('advisor-chat-input');
+    if (input && !input.disabled) input.focus();
+  }
+
   function appendAdvisorBubble(text) {
     var history = document.getElementById('advisor-chat-history');
     if (!history) return;
@@ -671,6 +676,7 @@
 
       if (!json.success || !json.data || !json.data.reply) {
         appendAdvisorBubble(getAdvisorFallback());
+        setTimeout(focusAdvisorInput, 50);
         return;
       }
 
@@ -681,6 +687,7 @@
         // and undo the messageCount increment so capture timing stays accurate
         advisorState.messageCount--;
         appendAdvisorBubble(data.reply);
+        setTimeout(focusAdvisorInput, 50);
         return;
       }
 
@@ -698,6 +705,7 @@
       }
 
       appendAdvisorBubble(data.reply);
+      setTimeout(focusAdvisorInput, 50);
 
       var captureAllowed = data.should_capture &&
                            advisorState.messageCount >= 2 &&
@@ -715,6 +723,7 @@
       removeAdvisorTyping();
       disableAdvisorInput(false);
       appendAdvisorBubble(getAdvisorFallback());
+      setTimeout(focusAdvisorInput, 50);
     });
   }
 
