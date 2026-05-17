@@ -669,6 +669,14 @@
 
       var data = json.data;
 
+      if (data.is_fallback) {
+        // API call failed — show fallback text but do not corrupt conversation history
+        // and undo the messageCount increment so capture timing stays accurate
+        advisorState.messageCount--;
+        appendAdvisorBubble(data.reply);
+        return;
+      }
+
       advisorState.conversationHistory.push({ role: 'user',      content: text });
       advisorState.conversationHistory.push({ role: 'assistant', content: data.reply });
 

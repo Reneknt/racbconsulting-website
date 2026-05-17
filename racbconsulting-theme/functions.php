@@ -1100,22 +1100,22 @@ HARD RULES:
 - JSON must be valid and parseable. No trailing commas.";
 
     $messages = array(
-        array('role' => 'developer', 'content' => $system_prompt),
+        array('role' => 'system', 'content' => $system_prompt),
     );
     foreach ($clean_history as $h) {
         $messages[] = $h;
     }
     $messages[] = array('role' => 'user', 'content' => $message);
 
-    $response = wp_remote_post('https://api.openai.com/v1/responses', array(
+    $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
         'timeout' => 20,
         'headers' => array(
             'Authorization' => 'Bearer ' . $api_key,
             'Content-Type'  => 'application/json',
         ),
         'body' => wp_json_encode(array(
-            'model' => $model,
-            'input' => $messages,
+            'model'    => $model,
+            'messages' => $messages,
         )),
     ));
 
@@ -1125,14 +1125,24 @@ HARD RULES:
     }
 
     $body     = json_decode(wp_remote_retrieve_body($response), true);
-    $raw_text = $body['output'][0]['content'][0]['text'] ?? '';
+    $raw_text = $body['choices'][0]['message']['content'] ?? '';
 
     if (!$raw_text) {
         wp_send_json_success(racb_advisor_fallback($lang, $advisor_name));
         return;
     }
 
-    $parsed = json_decode($raw_text, true);
+    // Strip markdown code fences the model sometimes adds around JSON
+    $clean_text = trim(preg_replace('/^```(?:json)?\s*/i', '', preg_replace('/\s*```$/i', '', trim($raw_text))));
+    $parsed = json_decode($clean_text, true);
+
+    // Last-resort: extract the first JSON object from the raw text
+    if (!is_array($parsed) || !isset($parsed['reply'])) {
+        if (preg_match('/\{.+\}/s', $raw_text, $m)) {
+            $parsed = json_decode($m[0], true);
+        }
+    }
+
     if (!is_array($parsed) || !isset($parsed['reply'])) {
         wp_send_json_success(racb_advisor_fallback($lang, $advisor_name));
         return;
@@ -1158,6 +1168,7 @@ HARD RULES:
         'suggested_next_step' => in_array($parsed['suggested_next_step'] ?? '', $allowed_steps, true) ? $parsed['suggested_next_step'] : 'continue',
         'extracted_name'      => $extracted_name,
         'advisor_name'        => $advisor_name,
+        'is_fallback'         => false,
     ));
 }
 
@@ -1187,6 +1198,7 @@ function racb_advisor_fallback($lang = 'en', $advisor_name = '') {
         'suggested_next_step' => 'continue',
         'extracted_name'      => null,
         'advisor_name'        => $advisor_name,
+        'is_fallback'         => true,
     );
 }
 
