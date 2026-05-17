@@ -411,7 +411,7 @@
   }
 
   function sendAdvisorRouting(intentValue) {
-    if (advisorState.captureShown || advisorState.submitted) return;
+    if (advisorState.submitted) return;
     var t = translations[currentLang];
     var labelKey = intentValue === 'diagnostic' ? 'advisor-route-diagnostic'
                  : intentValue === 'service'    ? 'advisor-route-service'
