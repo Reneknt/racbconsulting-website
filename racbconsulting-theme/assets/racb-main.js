@@ -745,16 +745,23 @@
   }
 
   function getAdvisorFallback() {
-    var pool = currentLang === 'es'
+    var spanishSignals = ['hola','buenas','español','espanol','gracias','necesito','empresa',
+      'negocio','diagnóstico','diagnostico','dinero','operación','operacion','costo','precio',
+      'cuánto','cuanto','me llamo','hablas con'];
+    var recentText = advisorState.conversationHistory.slice(-6)
+      .map(function(h) { return h.content || ''; }).join(' ').toLowerCase();
+    var spanishDetected = spanishSignals.some(function(s) { return recentText.indexOf(s) !== -1; });
+    var fallbackLang = (currentLang === 'es' || spanishDetected) ? 'es' : 'en';
+    var pool = fallbackLang === 'es'
       ? [
-          'Algo interrumpió la conexión. Cuéntame qué está pasando en la operación.',
-          'Se cayó la conexión por un momento. ¿Qué parte de la operación te está generando más problema?',
-          'Hubo un corte. Retomamos — ¿qué está fallando dentro de la operación?'
+          'Perdona, se interrumpió brevemente la conexión de mi lado. Retomamos: ¿qué parte del negocio te está generando más incertidumbre ahora mismo?',
+          'Se interrumpió un momento, pero seguimos. Cuéntame: ¿dónde sientes más fricción hoy en la operación?',
+          'Gracias por la paciencia. Retomemos con calma: ¿qué proceso o área te preocupa más ahora mismo?'
         ]
       : [
-          'Connection dropped for a moment. What\'s happening inside your operation?',
-          'Something interrupted the line. Walk me through what\'s going on.',
-          'Lost the connection briefly. Tell me what part of the operation is giving you trouble.'
+          'Sorry, the connection briefly interrupted on my side. Let\'s continue: where are you feeling the most operational pressure right now?',
+          'The line paused for a moment, but we can continue. Where does the business feel most inefficient right now?',
+          'Thanks for your patience. Let\'s pick it back up calmly: what process or area feels most unclear right now?'
         ];
     return pool[advisorState.messageCount % pool.length];
   }
