@@ -123,8 +123,13 @@
     conversationSummary: '',
     conversationHistory: [],
     userName: '',
-    advisorName: ''
+    advisorName: '',
+    sessionId: ''
   };
+
+  function generateSessionId() {
+    return Math.random().toString(36).slice(2, 11) + Date.now().toString(36);
+  }
 
   function getAdvisorPersona() {
     var h = new Date().getHours();
@@ -182,6 +187,7 @@
     advisorState.conversationHistory = [];
     advisorState.userName            = '';
     advisorState.advisorName         = personaName;
+    advisorState.sessionId           = generateSessionId();
 
     setAdvisorModalTitle(personaName);
     history.innerHTML = '';
@@ -649,6 +655,7 @@
     body.append('history',       JSON.stringify(history));
     body.append('message_count', String(advisorState.messageCount));
     body.append('user_name',     advisorState.userName);
+    body.append('session_id',    advisorState.sessionId);
 
     var ajaxUrl = typeof racbAjax !== 'undefined' ? racbAjax.ajax_url : '/wp-admin/admin-ajax.php';
 

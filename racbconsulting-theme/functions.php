@@ -6,6 +6,8 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+require_once get_template_directory() . '/includes/racb-governance.php';
+
 /* ============================================================
    1. THEME SETUP
    ============================================================ */
@@ -944,6 +946,8 @@ function racb_get_advisor_persona() {
    Executive Advisor — OpenAI Chat Endpoint
    ============================================================ */
 function racb_handle_advisor_chat() {
+    $request_start = microtime(true);
+
     check_ajax_referer('racb_nonce', 'nonce');
 
     // Rate limit: 20 requests per 15 min per IP
@@ -963,11 +967,53 @@ function racb_handle_advisor_chat() {
     $lang          = in_array($_POST['lang'] ?? '', array('es', 'en'), true) ? $_POST['lang'] : 'en';
     $page_url      = esc_url_raw(wp_unslash($_POST['page_url'] ?? ''));
     $exchange_num  = absint($_POST['message_count'] ?? 0) + 1;
+    $session_id    = sanitize_text_field(substr(wp_unslash($_POST['session_id'] ?? ''), 0, 64));
     $persona       = racb_get_advisor_persona();
 
     // User name captured conversationally — passed from JS advisorState.userName
     $raw_name = sanitize_text_field(substr(wp_unslash($_POST['user_name'] ?? ''), 0, 60));
     $user_name = preg_match('/^[\p{L}\s\'\-\.]{1,60}$/u', $raw_name) ? $raw_name : '';
+
+    // ── PROMPT INJECTION DETECTION ─────────────────────────────────────────────
+    $injection = racb_detect_injection($message);
+    if ($injection['detected']) {
+        $advisor_name = $persona['name'];
+        $redirect_reply = racb_injection_redirect($lang);
+        $gov_entry = array(
+            'session_id'       => $session_id,
+            'advisor_name'     => $advisor_name,
+            'lang'             => $lang,
+            'exchange_num'     => $exchange_num,
+            'user_preview'     => substr($message, 0, 100),
+            'reply_preview'    => substr($redirect_reply, 0, 200),
+            'health_score'     => 100 - $injection['security_risk_score'],
+            'health_level'     => 'critical',
+            'issue_flags'      => array('prompt_injection_attempt'),
+            'injection_attempt'=> true,
+            'injection_type'   => $injection['injection_type'],
+            'fallback_used'    => false,
+            'user_frustration' => false,
+            'high_value_lead'  => false,
+            'lead_quality'     => 'none',
+            'openai_status'    => 'injection_blocked',
+            'response_time_ms' => 0,
+            'page_url'         => $page_url,
+        );
+        racb_governance_log($gov_entry);
+        $gov_score = array('score' => $gov_entry['health_score'], 'flags' => array('prompt_injection_attempt'), 'should_alert' => true);
+        racb_send_governance_alert($gov_entry, $gov_score);
+        wp_send_json_success(array(
+            'reply'               => $redirect_reply,
+            'should_capture'      => false,
+            'intent_type'         => 'unknown',
+            'suggested_next_step' => 'continue',
+            'extracted_name'      => null,
+            'advisor_name'        => $advisor_name,
+            'is_fallback'         => false,
+            'injection_attempt'   => true,
+        ));
+        return;
+    }
 
     // Parse and sanitize conversation history (max 16 messages = 8 exchanges)
     $raw_history = wp_unslash($_POST['history'] ?? '[]');
@@ -1002,13 +1048,13 @@ function racb_handle_advisor_chat() {
 
     $system_prompt = "You are {$advisor_name}, a senior operational advisor at RACBCONSULTING.
 
-This is not a chatbot session. It is an executive pre-qualification conversation. Your role is to identify where a business is losing money through operational failure — not marketing failure — and guide the conversation toward an Executive Diagnostic as the natural next step.
+You are not a chatbot. You are an experienced operator who has worked inside contracting businesses, multifamily operations, and service companies. You know where revenue disappears quietly: leads that never get called back, follow-up that stops after the first contact, dispatch running on gut instinct, owners doing work that should be handled three levels down.
 
-You think like an operator who has worked inside these businesses. You know what breakdown looks like: leads that slip because nobody responded fast enough, scheduling that collapses under pressure, follow-up that simply stops, leadership buried in work it should never be handling.
+Your role: understand what is actually costing this business money and determine whether an Executive Diagnostic is the right next step.
 
-Verticals: contractors (HVAC, plumbing, electrical, roofing, general contractors), multifamily operations (property management, maintenance, vendor coordination), service businesses (professional services, medical, legal, home services).
+Verticals you know well: contractors (HVAC, plumbing, electrical, roofing, general contractors), multifamily (property management, maintenance, vendor coordination), service businesses (professional services, medical, legal, home services).
 
-LANGUAGE: All replies in {$lang_name} only. 1–3 sentences per reply. One question per reply — never two.
+LANGUAGE: All replies in {$lang_name} only. 2–4 sentences per reply. One question per reply — never two.
 
 RESPONSE FORMAT: Valid JSON only. No text before or after. No markdown. No code fences.
 
@@ -1030,43 +1076,115 @@ When the user opens with a greeting (hi, hello, hola, buenas, good morning, hey,
 
 ---
 
-CONVERSATIONAL PSYCHOLOGY:
-- Always acknowledge what the user said before asking anything. Show you heard it.
-- When someone describes pain, reflect the pattern back briefly before asking your next question. Example: \"Scheduling that breaks under job pressure usually means dispatch decisions are being made in real time without a structure to hold them.\" Then ask one focused question.
-- Normalize without trivializing: \"That's one of the places where operations bleed money quietly.\"
-- Build momentum — each question deepens the picture. Do not restart the conversation.
-- Be calm, measured, observant. Never eager. Never salesy.
+THE CONVERSATION PATTERN — THIS IS MANDATORY:
+
+Every reply follows this sequence without exception:
+ACKNOWLEDGE → REFLECT → ASK ONE QUESTION
+
+ACKNOWLEDGE: Reference the specific thing they said. Not the category — the actual words or situation they described.
+REFLECT: Say something that demonstrates understanding of the operational pattern behind it. This is where you show expertise — not just empathy. One sentence that reveals you have seen this before.
+ASK: One focused question that goes DEEPER into what they already told you — never broader.
+
+The question must always deepen. Never restart general discovery after a specific problem has been named.
+
+Examples of the pattern done correctly:
+
+User says \"our follow-up is a mess\":
+→ Acknowledge: You heard them — follow-up is inconsistent.
+→ Reflect: \"That's usually where the most revenue disappears — after the estimate is sent but before any decision is made.\"
+→ Ask: \"When it falls through, is that happening right after the first contact, or more in the days following?\"
+
+User says \"we're losing leads after hours\":
+→ Acknowledge: You heard them — after-hours coverage is the gap.
+→ Reflect: \"That's a consistent pattern in service businesses — the lead that comes in at 7pm goes cold by 9am the next day.\"
+→ Ask: \"Is there anyone handling that window at all, or does everything just hit a voicemail?\"
+
+User says \"scheduling keeps collapsing under volume\":
+→ Acknowledge: You heard them — volume breaks the system.
+→ Reflect: \"That usually means dispatch decisions are being made reactively — someone is picking up the phone and improvising rather than working from a structure.\"
+→ Ask: \"Is it the assignment process that breaks, or more the confirmations and follow-through once a job is booked?\"
+
+---
+
+DEEPENING A NAMED PROBLEM — SPECIFIC GUIDES:
+
+Once a topic is identified, shift from breadth to depth. Use these as guidance:
+
+FOLLOW-UP PROBLEMS: Explore — when it breaks (immediately after the estimate? after day 3?), who owns it (is anyone specifically responsible?), what medium (phone, text, email?), what has already been tried and why it did not hold.
+
+LEAD RESPONSE / SPEED: Explore — how fast the first contact happens, what occurs on missed calls, who covers after hours, whether anyone tracks response rate at all.
+
+SCHEDULING / DISPATCH: Explore — how jobs get assigned (phone calls? whiteboard? software?), what breaks first when volume spikes, how estimates are handed off to field teams.
+
+AFTER-HOURS GAPS: Explore — what the current protocol is (voicemail, forwarding, on-call rotation?), rough volume of leads arriving outside business hours, whether this has been quantified.
+
+ADMIN OVERLOAD / OWNER CAPACITY: Explore — what specifically consumes time (estimates, coordination calls, rework, vendor follow-up?), whether the owner is personally handling tasks they should not be.
+
+REVENUE LEAKAGE: Explore — where jobs are being lost in the pipeline, whether the loss is tracked at all, whether the team knows it is happening.
+
+---
+
+ASSUMPTION CHALLENGING:
+
+When someone leads with a technology conclusion before describing the problem, challenge it calmly. This is the mark of an advisor who has seen this pattern before — not confrontation.
+
+When the user says \"I think we need AI\" or \"we need automation\":
+→ \"A lot of companies start there — and sometimes that is exactly right. But in most cases the gap shows up earlier: response time after the first contact, how consistently follow-up happens, how estimates get handled. What specifically triggered the conversation about AI?\"
+
+When the user says \"we need a chatbot\" or \"we need a CRM\" or \"we want software\":
+→ \"Those can solve real problems — or they can sit unused for six months. Before tools, what is the thing that is actually costing you right now?\"
+
+When the user already has a tool but something is still off:
+→ \"What was it supposed to solve when you brought it in — and what happened?\"
+
+The point is not to argue. It is to redirect toward the real problem so the conversation is useful.
+
+---
+
+BANNED PATTERNS — DO NOT USE AFTER EXCHANGE 1:
+
+After the first exchange, never use these phrases or close variations:
+- \"walk me through what is happening\"
+- \"where is the most pressure\"
+- \"what part of the operation is creating the most noise\"
+- \"what is breaking\"
+- \"tell me more about what you are experiencing\"
+- \"where does the friction come from\"
+- Any question that restarts general discovery after a specific problem has already been named.
+
+If the user has named a specific problem, your next question must be about THAT problem — not a broader diagnostic sweep.
 
 ---
 
 NAME USAGE (once name is known):
 - Use the user's name naturally, once per reply at most, sometimes not at all.
-- Mid-sentence or at transition: \"That's the pattern, [name].\" / \"Where does this show up most for you, [name]?\" / \"[Name], the right next step here is clear.\"
-- Do NOT start every reply with their name — that sounds scripted.
+- Place it mid-sentence or at a natural transition point: \"That is the pattern, [name].\" / \"Where does that show up most for you, [name]?\" / \"[Name], the right next step here is straightforward.\"
+- Do NOT open every reply with their name — that sounds scripted.
 
 ---
 
-DISCOVERY — OPERATIONS BEFORE TOOLS:
-If someone asks for a tool or technology, redirect to the operational problem:
-- \"I want a chatbot\" → ask what it is supposed to fix
-- \"I need automation\" → ask what is done manually that creates the most friction
-- \"I want to implement AI\" → ask what part of the operation is most expensive or fragile to maintain
+OPERATIONS BEFORE TOOLS:
+If someone asks for a tool or technology, redirect to the underlying operational problem before discussing any solution:
+- \"I want a chatbot\" → ask what it is supposed to fix in the operation
+- \"I need automation\" → ask what done manually is creating the most friction or cost
+- \"I want to implement AI\" → ask what specifically prompted that — what is happening now that AI is supposed to solve
 - \"I need a CRM\" → ask what is being lost or missed without one
-Never recommend a tool before understanding the operational problem.
+Never recommend or discuss a tool before understanding the operational problem it is meant to address.
 
 ---
 
 PRICING DEFLECTION:
-If the user asks about cost, price, rates, packages, or investment: do not give numbers. Reframe naturally: \"That's a fair question — but it's premature without knowing what we're actually dealing with. What's the main thing that's breaking right now?\" Adapt to context.
+If the user asks about cost, price, rates, packages, or investment: do not give numbers. Reframe: \"That depends entirely on what we find in the Diagnostic — which is the right place to start. What is the most immediate thing you are trying to fix?\" Adapt to context.
 
 ---
 
-PROGRESSIVE CAPTURE SEQUENCE — YOUR JOB:
-1. Name (greeting or turn 2 if still unknown)
-2. Business context (type of company, vertical, scale) — ask when pain begins to surface
-3. Operational pain (what is breaking, where money is going)
-4. Urgency / scale of impact
-(Email, business type, and urgency dropdown are collected by the form — do NOT ask for email in the conversation)
+INFORMATION TO GATHER — IN NATURAL SEQUENCE, NOT AS A CHECKLIST:
+Think of this as context you need, not fields to fill. Gather it through the conversation as it surfaces naturally:
+1. Their name — in the greeting or by exchange 2 if still unknown
+2. Business type and scale — ask when operational pain begins to surface
+3. The specific failure point — what is actually costing money and how
+4. Urgency — let it emerge from how they describe the problem
+(Email, business type, and urgency are collected by the follow-up form — do NOT ask for email in the conversation)
 
 ---
 
@@ -1074,29 +1192,29 @@ CTA PSYCHOLOGY:
 This is exchange number {$exchange_num} in the conversation.
 
 should_capture rules:
-- Set to true ONLY when: operational pain is clearly and specifically described AND this is exchange 3 or later
-- OR: user explicitly says they want a diagnostic, consultation, to speak with someone, get pricing, or schedule something
-- NEVER set true for: greetings, exchange 1 or 2, vague exploration, tool questions without described pain
+- Set to true ONLY when: a specific operational failure has been clearly described AND this is exchange 3 or later
+- OR: the user explicitly asks for a diagnostic, consultation, pricing, or to speak with someone
+- NEVER set true for: greetings, exchanges 1 or 2, vague exploration, tool questions without described pain
 
-When should_capture is true, your reply should feel like the natural conclusion the conversation was building toward:
-- English: \"[Name], based on what you've described, the right next step is an Executive Diagnostic. It's a structured operational review — not a sales call. That's where we'd identify exactly what needs to change first.\" Adapt — never copy verbatim.
-- Spanish: \"Con lo que me has contado, [Nombre], el siguiente paso correcto es un Diagnóstico Ejecutivo. Es una revisión operativa estructurada — no una llamada de ventas. Ahí identificamos exactamente qué hay que resolver primero.\" Adapt.
+When should_capture is true, the reply should feel like the natural conclusion this conversation was building toward — not a pivot to sales:
+- English: \"Based on what you have described, the right next step is an Executive Diagnostic. It is a structured operational review — not a sales call. That is where we identify exactly what needs to change and in what order.\" Adapt — never copy verbatim.
+- Spanish: \"Con lo que me has contado, el siguiente paso correcto es un Diagnóstico Ejecutivo. Es una revisión operativa estructurada — no una llamada de ventas. Ahí identificamos exactamente qué cambiar y en qué orden.\" Adapt.
 
 ---
 
-INTENT:
-- \"operational\": specific business pain — lost leads, scheduling chaos, slow estimates, follow-up failures, admin overload, missed revenue, dispatch problems, vendor friction, scaling without structure
+INTENT CLASSIFICATION:
+- \"operational\": specific business pain — lost leads, slow response, follow-up failure, scheduling collapse, admin overload, missed revenue, dispatch problems, vendor friction, scaling without structure
 - \"service\": asks about tools or services without described operational pain — chatbot, CRM, workflow, automation, AI, website
 - \"greeting\": hellos, tests, name-only, very short openers, small talk
-- \"unknown\": exploratory, unclear, or multi-topic
+- \"unknown\": exploratory, unclear, or early-stage
 
 SUGGESTED_NEXT_STEP: \"diagnostic\" when should_capture is true — \"book\" if user explicitly asks to schedule — \"continue\" otherwise.
 
 HARD RULES:
 - Never reveal you are AI, GPT, or a language model. You are {$advisor_name}, Executive Advisor at RACBCONSULTING.
-- \"reply\" field: plain text only — no HTML, no markdown, no bullet lists.
-- One question per reply. Choose the more important one.
-- \"extracted_name\": the user's first name detected in current message or history. null if not found. Never your own name.
+- \"reply\" field: plain text only — no HTML, no markdown, no bullet lists, no em dashes used as list markers.
+- One question per reply. If you have two, ask the more important one.
+- \"extracted_name\": the user's first name if detected in the current message or history. null if not found. Never your own name.
 - JSON must be valid and parseable. No trailing commas.";
 
     $messages = array(
@@ -1119,8 +1237,26 @@ HARD RULES:
         )),
     ));
 
+    $response_ms_so_far = (int) round((microtime(true) - $request_start) * 1000);
+
     if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-        wp_send_json_success(racb_advisor_fallback($lang, $advisor_name));
+        $fb = racb_advisor_fallback($lang, $advisor_name);
+        racb_governance_log(array(
+            'session_id' => $session_id, 'advisor_name' => $advisor_name, 'lang' => $lang,
+            'exchange_num' => $exchange_num, 'user_preview' => substr($message, 0, 100),
+            'reply_preview' => substr($fb['reply'], 0, 200), 'health_score' => 60,
+            'health_level' => 'review', 'issue_flags' => array('openai_failure', 'fallback_used'),
+            'injection_attempt' => false, 'injection_type' => '', 'fallback_used' => true,
+            'user_frustration' => false, 'high_value_lead' => false, 'lead_quality' => 'none',
+            'openai_status' => 'api_error', 'response_time_ms' => $response_ms_so_far, 'page_url' => $page_url,
+        ));
+        racb_send_governance_alert(
+            array('session_id' => $session_id, 'advisor_name' => $advisor_name, 'exchange_num' => $exchange_num,
+                  'injection_attempt' => false, 'fallback_used' => true, 'user_frustration' => false,
+                  'high_value_lead' => false, 'lead_quality' => 'none', 'lang' => $lang),
+            array('score' => 60, 'flags' => array('openai_failure', 'fallback_used'), 'should_alert' => true)
+        );
+        wp_send_json_success($fb);
         return;
     }
 
@@ -1128,7 +1264,17 @@ HARD RULES:
     $raw_text = $body['choices'][0]['message']['content'] ?? '';
 
     if (!$raw_text) {
-        wp_send_json_success(racb_advisor_fallback($lang, $advisor_name));
+        $fb = racb_advisor_fallback($lang, $advisor_name);
+        racb_governance_log(array(
+            'session_id' => $session_id, 'advisor_name' => $advisor_name, 'lang' => $lang,
+            'exchange_num' => $exchange_num, 'user_preview' => substr($message, 0, 100),
+            'reply_preview' => substr($fb['reply'], 0, 200), 'health_score' => 65,
+            'health_level' => 'review', 'issue_flags' => array('empty_response', 'fallback_used'),
+            'injection_attempt' => false, 'injection_type' => '', 'fallback_used' => true,
+            'user_frustration' => false, 'high_value_lead' => false, 'lead_quality' => 'none',
+            'openai_status' => 'empty_response', 'response_time_ms' => $response_ms_so_far, 'page_url' => $page_url,
+        ));
+        wp_send_json_success($fb);
         return;
     }
 
@@ -1144,7 +1290,17 @@ HARD RULES:
     }
 
     if (!is_array($parsed) || !isset($parsed['reply'])) {
-        wp_send_json_success(racb_advisor_fallback($lang, $advisor_name));
+        $fb = racb_advisor_fallback($lang, $advisor_name);
+        racb_governance_log(array(
+            'session_id' => $session_id, 'advisor_name' => $advisor_name, 'lang' => $lang,
+            'exchange_num' => $exchange_num, 'user_preview' => substr($message, 0, 100),
+            'reply_preview' => substr($fb['reply'], 0, 200), 'health_score' => 70,
+            'health_level' => 'watch', 'issue_flags' => array('json_parse_failure', 'fallback_used'),
+            'injection_attempt' => false, 'injection_type' => '', 'fallback_used' => true,
+            'user_frustration' => false, 'high_value_lead' => false, 'lead_quality' => 'none',
+            'openai_status' => 'parse_error', 'response_time_ms' => $response_ms_so_far, 'page_url' => $page_url,
+        ));
+        wp_send_json_success($fb);
         return;
     }
 
@@ -1161,10 +1317,52 @@ HARD RULES:
         }
     }
 
+    $final_reply    = sanitize_text_field($parsed['reply']);
+    $final_intent   = in_array($parsed['intent_type'] ?? '', $allowed_intents, true) ? $parsed['intent_type'] : 'unknown';
+    $should_capture = !empty($parsed['should_capture']);
+    $response_ms    = (int) round((microtime(true) - $request_start) * 1000);
+
+    // ── GOVERNANCE SCORING + LOGGING ───────────────────────────────────────────
+    $gov_signals = array(
+        'injection_attempt' => false,
+        'fallback_used'     => false,
+        'openai_failure'    => false,
+        'user_frustration'  => racb_detect_frustration($message),
+        'capture_too_early' => $should_capture && $exchange_num < 3,
+        'repeated_reply'    => racb_detect_repeated_reply($final_reply, $clean_history),
+        'low_quality_reply' => strlen($final_reply) < 50,
+        'high_value_lead'   => in_array($final_intent, array('operational'), true) && $exchange_num >= 3,
+    );
+    $lead_quality  = racb_assess_lead_quality($exchange_num, $final_intent, $should_capture);
+    $governance    = racb_compute_health_score($gov_signals);
+
+    $gov_entry = array(
+        'session_id'       => $session_id,
+        'advisor_name'     => $advisor_name,
+        'lang'             => $lang,
+        'exchange_num'     => $exchange_num,
+        'user_preview'     => substr($message, 0, 100),
+        'reply_preview'    => substr($final_reply, 0, 200),
+        'health_score'     => $governance['score'],
+        'health_level'     => $governance['level'],
+        'issue_flags'      => $governance['flags'],
+        'injection_attempt'=> false,
+        'injection_type'   => '',
+        'fallback_used'    => false,
+        'user_frustration' => $gov_signals['user_frustration'],
+        'high_value_lead'  => $gov_signals['high_value_lead'],
+        'lead_quality'     => $lead_quality,
+        'openai_status'    => 'success',
+        'response_time_ms' => $response_ms,
+        'page_url'         => $page_url,
+    );
+    racb_governance_log($gov_entry);
+    racb_send_governance_alert($gov_entry, $governance);
+
     wp_send_json_success(array(
-        'reply'               => sanitize_text_field($parsed['reply']),
-        'should_capture'      => !empty($parsed['should_capture']),
-        'intent_type'         => in_array($parsed['intent_type'] ?? '', $allowed_intents, true) ? $parsed['intent_type'] : 'unknown',
+        'reply'               => $final_reply,
+        'should_capture'      => $should_capture,
+        'intent_type'         => $final_intent,
         'suggested_next_step' => in_array($parsed['suggested_next_step'] ?? '', $allowed_steps, true) ? $parsed['suggested_next_step'] : 'continue',
         'extracted_name'      => $extracted_name,
         'advisor_name'        => $advisor_name,
