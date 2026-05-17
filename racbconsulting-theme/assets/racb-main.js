@@ -111,12 +111,41 @@
 
   // ===== ADVISOR CHAT MODAL =====
 
-  const ADVISOR_REPLY = 'Thank you. Based on what you shared, this may require an Executive Diagnostic to identify where execution is breaking and where revenue may be leaking.';
   const MVP_URL = 'https://mvp.racbconsulting.com';
+
+  var advisorState = {
+    firstMessage: '',
+    quickPromptUsed: false,
+    captureShown: false,
+    submitted: false,
+    messageCount: 0,
+    intentType: '',
+    conversationSummary: '',
+    conversationHistory: [],
+    userName: '',
+    advisorName: ''
+  };
+
+  function getAdvisorPersona() {
+    var h = new Date().getHours();
+    if (h >= 5  && h < 12) return 'Daniel';
+    if (h >= 12 && h < 17) return 'Marcus';
+    if (h >= 17 && h < 22) return 'Sofia';
+    return 'Daniel';
+  }
+
+  function setAdvisorModalTitle(name) {
+    var el = document.getElementById('advisor-modal-title');
+    if (el) el.textContent = name;
+  }
 
   function openAdvisorModal() {
     const modal = document.getElementById('advisor-modal');
     if (!modal) return;
+    if (!advisorState.advisorName) {
+      advisorState.advisorName = getAdvisorPersona();
+    }
+    setAdvisorModalTitle(advisorState.advisorName);
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
@@ -136,21 +165,61 @@
   }
 
   function resetAdvisorChat() {
-    const history = document.getElementById('advisor-chat-history');
+    var t = translations[currentLang];
+    var history = document.getElementById('advisor-chat-history');
     if (!history) return;
-    // Rebuild to initial state
-    history.innerHTML = `
-      <div class="advisor-msg advisor-msg--assistant">
-        <p>Welcome. I'm your RACBCONSULTING Executive Advisor. Tell me what is happening inside your operation, and I'll help identify the right next step.</p>
-      </div>
-      <div id="advisor-quick-prompts" class="advisor-quick-prompts">
-        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">We are losing leads</button>
-        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Scheduling is chaotic</button>
-        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Follow-up is inconsistent</button>
-        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)">Operations feel overloaded</button>
-      </div>`;
-    const input = document.getElementById('advisor-chat-input');
-    if (input) input.value = '';
+
+    // Compute fresh persona for next conversation
+    var personaName = getAdvisorPersona();
+
+    advisorState.firstMessage        = '';
+    advisorState.quickPromptUsed     = false;
+    advisorState.captureShown        = false;
+    advisorState.submitted           = false;
+    advisorState.messageCount        = 0;
+    advisorState.intentType          = '';
+    advisorState.conversationSummary = '';
+    advisorState.conversationHistory = [];
+    advisorState.userName            = '';
+    advisorState.advisorName         = personaName;
+
+    setAdvisorModalTitle(personaName);
+    history.innerHTML = '';
+
+    // Personalized welcome — advisor introduces themselves
+    var baseWelcome = t['fp-advisor-welcome'] || "Walk me through what's happening. Start with wherever the pressure is highest.";
+    var welcomeText = currentLang === 'es'
+      ? personaName + ' de RACBCONSULTING. ' + baseWelcome
+      : personaName + ' here. ' + baseWelcome;
+
+    var welcome = document.createElement('div');
+    welcome.className = 'advisor-msg advisor-msg--assistant';
+    var wp = document.createElement('p');
+    wp.textContent = welcomeText;
+    welcome.appendChild(wp);
+    history.appendChild(welcome);
+
+    var prompts = document.createElement('div');
+    prompts.id = 'advisor-quick-prompts';
+    prompts.className = 'advisor-quick-prompts';
+    [
+      t['fp-advisor-qp1'] || "We're losing leads",
+      t['fp-advisor-qp2'] || 'Scheduling keeps breaking',
+      t['fp-advisor-qp3'] || 'Follow-up keeps falling through',
+      t['fp-advisor-qp4'] || "We can't keep up operationally"
+    ].forEach(function(label) {
+      var btn = document.createElement('button');
+      btn.className = 'advisor-quick-prompt';
+      btn.textContent = label;
+      btn.addEventListener('click', function() { sendAdvisorPrompt(btn); });
+      prompts.appendChild(btn);
+    });
+    history.appendChild(prompts);
+
+    var input = document.getElementById('advisor-chat-input');
+    if (input) { input.value = ''; input.disabled = false; }
+    var sendBtn = document.querySelector('.advisor-chat-send');
+    if (sendBtn) sendBtn.disabled = false;
   }
 
   function appendAdvisorUserMessage(text) {
@@ -163,22 +232,50 @@
     scrollAdvisorHistory();
   }
 
-  function appendAdvisorAssistantMessage() {
-    const history = document.getElementById('advisor-chat-history');
-    if (!history) return;
-    const wrap = document.createElement('div');
-    wrap.className = 'advisor-msg advisor-msg--assistant';
-    wrap.innerHTML = `<p>${ADVISOR_REPLY}</p>`;
-    history.appendChild(wrap);
-    // TODO: MVP dependency — CTA intentionally routes to mvp.racbconsulting.com. MVP is managed in separate RACBCONSULTING-MVP project.
-    const cta = document.createElement('a');
-    cta.href = MVP_URL;
-    cta.target = '_blank';
-    cta.rel = 'noopener';
-    cta.className = 'advisor-chat-cta';
-    cta.textContent = 'Book Executive Diagnostic';
-    history.appendChild(cta);
-    scrollAdvisorHistory();
+  function appendAdvisorAssistantMessage(userText) {
+    var t = translations[currentLang];
+    if (advisorState.captureShown || advisorState.submitted) return;
+
+    advisorState.messageCount++;
+    if (userText) {
+      advisorState.conversationSummary += (advisorState.conversationSummary ? ' | ' : '') + userText;
+    }
+
+    // Update intent classification — always re-evaluate if greeting or unknown
+    var classified = classifyAdvisorMessage(userText || '');
+    if (!advisorState.intentType || advisorState.intentType === 'unknown' ||
+        advisorState.intentType === 'greeting') {
+      if (classified !== 'greeting' || !advisorState.intentType) {
+        advisorState.intentType = classified;
+      }
+    }
+
+    // Gate: show capture?
+    if (shouldShowCaptureNow()) {
+      advisorState.captureShown = true;
+      appendAdvisorBubble(t['advisor-bridge'] || "That gives me enough context. If you share your name and email, I can route this to the Executive Advisory Desk.");
+      setTimeout(renderAdvisorCaptureForm, 450);
+      return;
+    }
+
+    // Conversational reply based on intent
+    var replyKey;
+    if (advisorState.messageCount > 1 && advisorState.intentType === 'greeting') {
+      replyKey = 'advisor-unknown-reply';
+    } else {
+      switch (advisorState.intentType) {
+        case 'greeting':     replyKey = 'advisor-greeting-reply';     break;
+        case 'service':      replyKey = 'advisor-service-reply';      break;
+        case 'operational':  replyKey = 'advisor-operational-reply';  break;
+        default:             replyKey = 'advisor-unknown-reply';
+      }
+    }
+    appendAdvisorBubble(t[replyKey] || t['advisor-unknown-reply'] || "Understood. Tell me more about what you are trying to improve.");
+
+    // Routing buttons appear only after the greeting reply and only once
+    if (advisorState.intentType === 'greeting' && advisorState.messageCount === 1) {
+      setTimeout(renderAdvisorRoutingButtons, 350);
+    }
   }
 
   function scrollAdvisorHistory() {
@@ -191,21 +288,30 @@
   }
 
   function sendAdvisorMessage() {
-    const input = document.getElementById('advisor-chat-input');
+    if (advisorState.submitted || advisorState.captureShown) return;
+    var input = document.getElementById('advisor-chat-input');
     if (!input) return;
-    const text = input.value.trim();
+    var text = input.value.trim();
     if (!text) return;
     input.value = '';
+    if (!advisorState.firstMessage) advisorState.firstMessage = text;
     hideAdvisorQuickPrompts();
+    hideAdvisorRoutingButtons();
     appendAdvisorUserMessage(text);
-    setTimeout(appendAdvisorAssistantMessage, 600);
+    callAdvisorAPI(text);
   }
 
   function sendAdvisorPrompt(btn) {
-    const text = btn.textContent.trim();
+    if (advisorState.submitted || advisorState.captureShown) return;
+    var text = btn.textContent.trim();
+    if (!advisorState.firstMessage) {
+      advisorState.firstMessage = text;
+      advisorState.quickPromptUsed = true;
+    }
     hideAdvisorQuickPrompts();
+    hideAdvisorRoutingButtons();
     appendAdvisorUserMessage(text);
-    setTimeout(appendAdvisorAssistantMessage, 600);
+    callAdvisorAPI(text);
   }
 
   function hideAdvisorQuickPrompts() {
@@ -213,11 +319,429 @@
     if (prompts) prompts.remove();
   }
 
+  function classifyAdvisorMessage(text) {
+    var lc = text.toLowerCase().trim();
+    var greetings = ['hi','hello','hola','buenas','hey','buenos','buen dia','buen día',
+                     'saludos','howdy','yo','sup','good morning','good afternoon',
+                     'good day','test','testing'];
+    if (greetings.some(function(g) {
+      return lc === g || lc === g + '!' || lc === g + '.' || lc.startsWith(g + ' ') || lc.startsWith(g + ',');
+    })) return 'greeting';
+
+    var serviceKw = ['chatbot','bot','automation','automatización','automatizacion',
+                     'website','web','landing','crm','whatsapp','n8n','workflow',
+                     'flujo','ai agent','agente ia','agente de ia','appointment',
+                     'calendar','email automation','automatizar','platform',
+                     'plataforma','implementar','implement','build','crear',
+                     'create','develop','desarrollar','software','app','herramienta',
+                     'tool','sistema','system','integration','integración'];
+    if (serviceKw.some(function(k) { return lc.includes(k); })) return 'service';
+
+    var opKw = ['losing leads','perdiendo leads','missed calls','llamadas perdidas',
+                'scheduling','programación','programacion','follow-up','seguimiento',
+                'delayed estimate','presupuesto','admin overload','operations',
+                'operaciones','revenue','ingresos','leakage','fuga','maintenance',
+                'mantenimiento','vendor','proveedor','dispatch','despacho','leads',
+                'sales','ventas','slow','lento','inconsistent','inconsistente',
+                'broken','roto','chaos','caos','overloaded','sobrecargado',
+                'losing money','perdiendo dinero','not converting','no convierten',
+                'response time','tiempo de respuesta'];
+    if (opKw.some(function(k) { return lc.includes(k); })) return 'operational';
+
+    return 'unknown';
+  }
+
+  function shouldShowCaptureNow() {
+    if (advisorState.captureShown || advisorState.submitted) return false;
+    // Explicit diagnostic route always triggers capture
+    if (advisorState.intentType === 'diagnostic') return true;
+    // Two substantive messages — not still in greeting/unsure territory
+    if (advisorState.messageCount >= 2 &&
+        advisorState.intentType !== 'greeting' &&
+        advisorState.intentType !== 'unsure') return true;
+    // Fallback: after 3 exchanges regardless of intent
+    if (advisorState.messageCount >= 3) return true;
+    return false;
+  }
+
+  function appendAdvisorBubble(text) {
+    var history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'advisor-msg advisor-msg--assistant';
+    var p = document.createElement('p');
+    p.textContent = text;
+    wrap.appendChild(p);
+    history.appendChild(wrap);
+    scrollAdvisorHistory();
+  }
+
+  function renderAdvisorRoutingButtons() {
+    if (document.getElementById('advisor-routing-btns')) return;
+    var t = translations[currentLang];
+    var history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+    var container = document.createElement('div');
+    container.id = 'advisor-routing-btns';
+    container.className = 'advisor-quick-prompts';
+    [
+      { intent: 'diagnostic', key: 'advisor-route-diagnostic', fallback: 'I need an Executive Diagnostic' },
+      { intent: 'service',    key: 'advisor-route-service',    fallback: 'I need a specific service' },
+      { intent: 'unsure',     key: 'advisor-route-unsure',     fallback: "I'm not sure yet" }
+    ].forEach(function(route) {
+      var btn = document.createElement('button');
+      btn.className = 'advisor-quick-prompt';
+      btn.textContent = t[route.key] || route.fallback;
+      btn.addEventListener('click', function() { sendAdvisorRouting(route.intent); });
+      container.appendChild(btn);
+    });
+    history.appendChild(container);
+    scrollAdvisorHistory();
+  }
+
+  function hideAdvisorRoutingButtons() {
+    var el = document.getElementById('advisor-routing-btns');
+    if (el) el.remove();
+  }
+
+  function sendAdvisorRouting(intentValue) {
+    if (advisorState.captureShown || advisorState.submitted) return;
+    var t = translations[currentLang];
+    var labelKey = intentValue === 'diagnostic' ? 'advisor-route-diagnostic'
+                 : intentValue === 'service'    ? 'advisor-route-service'
+                 :                                'advisor-route-unsure';
+    var label = t[labelKey] || intentValue;
+
+    if (!advisorState.firstMessage) advisorState.firstMessage = label;
+
+    hideAdvisorRoutingButtons();
+    appendAdvisorUserMessage(label);
+    callAdvisorAPI(label);
+  }
+
   function handleAdvisorKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendAdvisorMessage();
     }
+  }
+
+  function renderAdvisorCaptureForm() {
+    var t = translations[currentLang];
+    var history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'advisor-msg advisor-msg--assistant';
+    wrap.id = 'advisor-capture-wrap';
+    wrap.style.maxWidth = '100%';
+
+    var form = document.createElement('div');
+    form.className = 'advisor-capture-form';
+
+    form.appendChild(buildAdvisorField('advisor-capture-name', 'text',
+      t['advisor-name-label'] || 'Name',
+      t['advisor-name-ph']    || 'Your name',
+      'name'));
+    form.appendChild(buildAdvisorField('advisor-capture-email', 'email',
+      t['advisor-email-label'] || 'Email',
+      t['advisor-email-ph']    || 'you@company.com',
+      'email'));
+    form.appendChild(buildAdvisorSelect('advisor-capture-btype',
+      t['advisor-btype-label'] || 'Business type', [
+        { value: '',            label: t['advisor-btype-opt0']        || 'Select...' },
+        { value: 'contractor',  label: t['advisor-btype-contractor']  || 'Contractor (HVAC, Plumbing, Electrical, Roofing)' },
+        { value: 'multifamily', label: t['advisor-btype-multifamily'] || 'Multifamily Operations' },
+        { value: 'service',     label: t['advisor-btype-service']     || 'Service Business' },
+        { value: 'other',       label: t['advisor-btype-other']       || 'Other' }
+      ]));
+    form.appendChild(buildAdvisorSelect('advisor-capture-urgency',
+      t['advisor-urgency-label'] || 'Urgency', [
+        { value: '',             label: t['advisor-urgency-opt0']       || 'Select...' },
+        { value: 'immediate',    label: t['advisor-urgency-immediate']  || 'I need to resolve this now' },
+        { value: 'within_month', label: t['advisor-urgency-month']      || 'Within the next month' },
+        { value: 'exploring',    label: t['advisor-urgency-exploring']  || 'Exploring options' }
+      ]));
+
+    var hp = document.createElement('input');
+    hp.type = 'text';
+    hp.id = 'advisor-hp';
+    hp.style.cssText = 'position:absolute;left:-9999px;opacity:0;pointer-events:none;';
+    hp.tabIndex = -1;
+    hp.setAttribute('autocomplete', 'off');
+    form.appendChild(hp);
+
+    var errEl = document.createElement('p');
+    errEl.id = 'advisor-capture-error';
+    errEl.className = 'advisor-capture-error';
+    errEl.style.display = 'none';
+    form.appendChild(errEl);
+
+    var submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.id = 'advisor-capture-submit';
+    submitBtn.className = 'advisor-capture-submit';
+    submitBtn.textContent = t['advisor-submit'] || 'Send to Advisory Desk';
+    submitBtn.addEventListener('click', submitAdvisorForm);
+    form.appendChild(submitBtn);
+
+    wrap.appendChild(form);
+    history.appendChild(wrap);
+
+    if (advisorState.userName) {
+      var nameInput = document.getElementById('advisor-capture-name');
+      if (nameInput) nameInput.value = advisorState.userName;
+    }
+
+    scrollAdvisorHistory();
+  }
+
+  function buildAdvisorField(id, type, labelText, placeholder, autocomplete) {
+    var field = document.createElement('div');
+    field.className = 'advisor-field';
+    var lbl = document.createElement('label');
+    lbl.setAttribute('for', id);
+    lbl.textContent = labelText;
+    field.appendChild(lbl);
+    var input = document.createElement('input');
+    input.type = type;
+    input.id = id;
+    input.placeholder = placeholder;
+    if (autocomplete) input.setAttribute('autocomplete', autocomplete);
+    field.appendChild(input);
+    return field;
+  }
+
+  function buildAdvisorSelect(id, labelText, options) {
+    var field = document.createElement('div');
+    field.className = 'advisor-field';
+    var lbl = document.createElement('label');
+    lbl.setAttribute('for', id);
+    lbl.textContent = labelText;
+    field.appendChild(lbl);
+    var sel = document.createElement('select');
+    sel.id = id;
+    options.forEach(function(opt) {
+      var o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (!opt.value) { o.disabled = true; o.selected = true; }
+      sel.appendChild(o);
+    });
+    field.appendChild(sel);
+    return field;
+  }
+
+  function submitAdvisorForm() {
+    if (advisorState.submitted) return;
+    var t         = translations[currentLang];
+    var nameEl    = document.getElementById('advisor-capture-name');
+    var emailEl   = document.getElementById('advisor-capture-email');
+    var btypeEl   = document.getElementById('advisor-capture-btype');
+    var urgencyEl = document.getElementById('advisor-capture-urgency');
+    var hpEl      = document.getElementById('advisor-hp');
+    var errEl     = document.getElementById('advisor-capture-error');
+    var submitBtn = document.getElementById('advisor-capture-submit');
+
+    var name    = nameEl    ? nameEl.value.trim()  : '';
+    var email   = emailEl   ? emailEl.value.trim() : '';
+    var btype   = btypeEl   ? btypeEl.value        : '';
+    var urgency = urgencyEl ? urgencyEl.value      : '';
+    var hp      = hpEl      ? hpEl.value           : '';
+
+    var errMsg = '';
+    if (!name)
+      errMsg = t['advisor-validation-name']    || 'Please enter your name.';
+    else if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      errMsg = t['advisor-validation-email']   || 'Please enter a valid email address.';
+    else if (!btype)
+      errMsg = t['advisor-validation-btype']   || 'Please select your business type.';
+    else if (!urgency)
+      errMsg = t['advisor-validation-urgency'] || 'Please select your urgency.';
+
+    if (errMsg) {
+      if (errEl) { errEl.textContent = errMsg; errEl.style.display = ''; }
+      return;
+    }
+    if (errEl) errEl.style.display = 'none';
+    if (hp) return;
+
+    advisorState.submitted = true;
+    if (submitBtn) { submitBtn.textContent = t['advisor-submitting'] || 'Sending...'; submitBtn.disabled = true; }
+
+    var body = new URLSearchParams();
+    body.append('action',            'racb_advisor');
+    body.append('nonce',             typeof racbAjax !== 'undefined' ? racbAjax.nonce : '');
+    body.append('name',              name);
+    body.append('email',             email);
+    body.append('business_type',     btype);
+    body.append('urgency',           urgency);
+    body.append('first_message',          advisorState.firstMessage);
+    body.append('quick_prompt_used',      advisorState.quickPromptUsed ? '1' : '0');
+    body.append('intent_type',            advisorState.intentType);
+    body.append('conversation_summary',   advisorState.conversationSummary);
+    body.append('message_count',          String(advisorState.messageCount));
+    body.append('lang',                   currentLang);
+    body.append('page_url',               window.location.href);
+    body.append('website',                hp);
+
+    var ajaxUrl = typeof racbAjax !== 'undefined' ? racbAjax.ajax_url : '/wp-admin/admin-ajax.php';
+
+    fetch(ajaxUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body:    body.toString()
+    })
+    .then(function(res) { return res.json(); })
+    .then(function() {
+      var captureWrap = document.getElementById('advisor-capture-wrap');
+      if (captureWrap) captureWrap.remove();
+      renderAdvisorSuccess(t);
+    })
+    .catch(function() {
+      advisorState.submitted = false;
+      if (submitBtn) { submitBtn.textContent = t['advisor-submit'] || 'Send to Advisory Desk'; submitBtn.disabled = false; }
+      if (errEl) { errEl.textContent = t['advisor-error-msg'] || 'Unable to process. Please try again or email ceo@racbconsulting.com.'; errEl.style.display = ''; }
+    });
+  }
+
+  function renderAdvisorSuccess(t) {
+    var history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'advisor-msg advisor-msg--assistant';
+    var msg = document.createElement('p');
+    msg.textContent = t['advisor-success-msg'] || 'We have your information. Our Executive Advisory Desk will be in touch within 24 hours.';
+    wrap.appendChild(msg);
+    // TODO: MVP dependency — CTA routes to mvp.racbconsulting.com. MVP is managed in separate RACBCONSULTING-MVP project.
+    var cta = document.createElement('a');
+    cta.href = MVP_URL;
+    cta.target = '_blank';
+    cta.rel = 'noopener';
+    cta.className = 'advisor-chat-cta';
+    cta.textContent = t['advisor-success-cta'] || 'Book Executive Diagnostic';
+    wrap.appendChild(cta);
+    history.appendChild(wrap);
+    scrollAdvisorHistory();
+  }
+
+  function callAdvisorAPI(text) {
+    if (advisorState.captureShown || advisorState.submitted) return;
+
+    advisorState.messageCount++;
+    if (text) {
+      advisorState.conversationSummary += (advisorState.conversationSummary ? ' | ' : '') + text;
+    }
+
+    showAdvisorTyping();
+    disableAdvisorInput(true);
+
+    var history = advisorState.conversationHistory.slice(-16).map(function(h) {
+      return { role: h.role, content: h.content };
+    });
+
+    var body = new URLSearchParams();
+    body.append('action',        'racb_advisor_chat');
+    body.append('nonce',         typeof racbAjax !== 'undefined' ? racbAjax.nonce : '');
+    body.append('message',       text);
+    body.append('lang',          currentLang);
+    body.append('page_url',      window.location.href);
+    body.append('history',       JSON.stringify(history));
+    body.append('message_count', String(advisorState.messageCount));
+    body.append('user_name',     advisorState.userName);
+
+    var ajaxUrl = typeof racbAjax !== 'undefined' ? racbAjax.ajax_url : '/wp-admin/admin-ajax.php';
+
+    fetch(ajaxUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body:    body.toString()
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(json) {
+      removeAdvisorTyping();
+      disableAdvisorInput(false);
+
+      if (!json.success || !json.data || !json.data.reply) {
+        appendAdvisorBubble(getAdvisorFallback());
+        return;
+      }
+
+      var data = json.data;
+
+      advisorState.conversationHistory.push({ role: 'user',      content: text });
+      advisorState.conversationHistory.push({ role: 'assistant', content: data.reply });
+
+      if (data.intent_type) advisorState.intentType = data.intent_type;
+
+      if (data.extracted_name && !advisorState.userName) {
+        advisorState.userName = data.extracted_name;
+      }
+      if (data.advisor_name) {
+        advisorState.advisorName = data.advisor_name;
+        setAdvisorModalTitle(data.advisor_name);
+      }
+
+      appendAdvisorBubble(data.reply);
+
+      var captureAllowed = data.should_capture &&
+                           advisorState.messageCount >= 2 &&
+                           !advisorState.captureShown &&
+                           !advisorState.submitted;
+      if (captureAllowed) {
+        advisorState.captureShown = true;
+        setTimeout(renderAdvisorCaptureForm, 500);
+      } else if (advisorState.messageCount === 1 && !data.should_capture &&
+                 advisorState.intentType === 'greeting') {
+        setTimeout(renderAdvisorRoutingButtons, 350);
+      }
+    })
+    .catch(function() {
+      removeAdvisorTyping();
+      disableAdvisorInput(false);
+      appendAdvisorBubble(getAdvisorFallback());
+    });
+  }
+
+  function showAdvisorTyping() {
+    if (document.getElementById('advisor-typing')) return;
+    var history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+    var div = document.createElement('div');
+    div.id = 'advisor-typing';
+    div.className = 'advisor-msg advisor-msg--assistant advisor-typing';
+    var p = document.createElement('p');
+    p.textContent = '...';
+    div.appendChild(p);
+    history.appendChild(div);
+    scrollAdvisorHistory();
+  }
+
+  function removeAdvisorTyping() {
+    var el = document.getElementById('advisor-typing');
+    if (el) el.remove();
+  }
+
+  function disableAdvisorInput(disabled) {
+    var input = document.getElementById('advisor-chat-input');
+    var btn   = document.querySelector('.advisor-chat-send');
+    if (input) input.disabled = disabled;
+    if (btn)   btn.disabled   = disabled;
+  }
+
+  function getAdvisorFallback() {
+    var pool = currentLang === 'es'
+      ? [
+          'Algo interrumpió la conexión. Cuéntame qué está pasando en la operación.',
+          'Se cayó la conexión por un momento. ¿Qué parte de la operación te está generando más problema?',
+          'Hubo un corte. Retomamos — ¿qué está fallando dentro de la operación?'
+        ]
+      : [
+          'Connection dropped for a moment. What\'s happening inside your operation?',
+          'Something interrupted the line. Walk me through what\'s going on.',
+          'Lost the connection briefly. Tell me what part of the operation is giving you trouble.'
+        ];
+    return pool[advisorState.messageCount % pool.length];
   }
 
   // ===== FORM HANDLER =====
@@ -778,12 +1302,48 @@
       "fp-advisor-cta": "Iniciar Conversación de Asesoría",
       "fp-advisor-modal-label": "Asesor Ejecutivo Privado",
       "fp-advisor-modal-title": "Asesor Ejecutivo",
-      "fp-advisor-welcome": "Bienvenido. Soy su Asesor Ejecutivo de RACBCONSULTING. Cuénteme qué está ocurriendo en su operación y le ayudaré a identificar el siguiente paso correcto.",
+      "fp-advisor-welcome": "Cuéntame qué está pasando en la operación. Empieza por donde sientas más presión.",
       "fp-advisor-qp1": "Estamos perdiendo leads",
-      "fp-advisor-qp2": "La programación es caótica",
-      "fp-advisor-qp3": "El seguimiento es inconsistente",
-      "fp-advisor-qp4": "Las operaciones se sienten sobrecargadas",
-      "fp-advisor-input-placeholder": "Describa qué está ocurriendo en su operación...",
+      "fp-advisor-qp2": "La programación sigue fallando",
+      "fp-advisor-qp3": "El seguimiento no es consistente",
+      "fp-advisor-qp4": "La operación no puede seguir el ritmo",
+      "fp-advisor-input-placeholder": "Cuéntame qué está fallando...",
+      "advisor-ack": "Con eso tengo suficiente contexto. Necesito un par de datos para conectarte con la persona correcta.",
+      "advisor-greeting-reply": "¿Qué parte de la operación te está generando más presión ahora mismo?",
+      "advisor-service-reply": "Eso depende de qué parte de la operación quieres mejorar. Antes de recomendar algo, cuéntame qué está fallando concretamente.",
+      "advisor-operational-reply": "Ese es un patrón que vemos con frecuencia. ¿Cuándo ocurre con más fuerza — es constante o se dispara en ciertos momentos?",
+      "advisor-unknown-reply": "¿Qué parte de la operación está generando más ruido ahora mismo?",
+      "advisor-route-diagnostic": "Quiero un Diagnóstico Ejecutivo",
+      "advisor-route-service": "Necesito un servicio específico",
+      "advisor-route-unsure": "Todavía estoy explorando",
+      "advisor-diagnostic-reply": "Bien. El Diagnóstico Ejecutivo es el punto de partida correcto. Necesito un par de datos para asignarlo al equipo indicado.",
+      "advisor-service-follow-reply": "Podemos evaluar eso. Antes de recomendar algo, dime qué proceso o resultado necesita mejorar primero.",
+      "advisor-unsure-reply": "Sin problema. El primer paso siempre es identificar dónde se está perdiendo dinero. ¿Hay algo urgente ahora mismo, o estás explorando opciones?",
+      "advisor-bridge": "Con eso tengo suficiente contexto. Necesito un par de datos para conectarte con la persona correcta.",
+      "advisor-name-label": "Nombre",
+      "advisor-name-ph": "Su nombre",
+      "advisor-email-label": "Correo electrónico",
+      "advisor-email-ph": "usted@empresa.com",
+      "advisor-btype-label": "Tipo de negocio",
+      "advisor-btype-opt0": "Seleccionar...",
+      "advisor-btype-contractor": "Contratista (HVAC, Plomería, Electricidad, Techado)",
+      "advisor-btype-multifamily": "Operaciones Multifamiliares",
+      "advisor-btype-service": "Negocio de Servicios",
+      "advisor-btype-other": "Otro",
+      "advisor-urgency-label": "Urgencia",
+      "advisor-urgency-opt0": "Seleccionar...",
+      "advisor-urgency-immediate": "Necesito resolver esto ahora",
+      "advisor-urgency-month": "Dentro del próximo mes",
+      "advisor-urgency-exploring": "Estoy explorando opciones",
+      "advisor-submit": "Enviar a la Mesa de Asesoría",
+      "advisor-submitting": "Enviando...",
+      "advisor-success-msg": "Recibimos su información. Nuestro Equipo de Asesoría Ejecutiva se pondrá en contacto dentro de las próximas 24 horas.",
+      "advisor-success-cta": "Reservar Diagnóstico Ejecutivo",
+      "advisor-error-msg": "No pudimos procesar su envío. Por favor intente de nuevo o escríbanos directamente a ceo@racbconsulting.com.",
+      "advisor-validation-name": "Por favor ingrese su nombre.",
+      "advisor-validation-email": "Por favor ingrese un correo electrónico válido.",
+      "advisor-validation-btype": "Por favor seleccione su tipo de negocio.",
+      "advisor-validation-urgency": "Por favor seleccione su urgencia.",
       "fp-footer-label": "Consultoría Ejecutiva",
       "fp-footer-headline": "Si todavía está aquí, su operación está dejando dinero sobre la mesa.",
       "fp-footer-subtext": "Identificamos dónde su empresa está perdiendo dinero y qué debe corregirse primero.",
@@ -1392,12 +1952,48 @@
       "fp-advisor-cta": "Start Advisory Conversation",
       "fp-advisor-modal-label": "Private Executive Advisor",
       "fp-advisor-modal-title": "Executive Advisor",
-      "fp-advisor-welcome": "Welcome. I'm your RACBCONSULTING Executive Advisor. Tell me what is happening inside your operation, and I'll help identify the right next step.",
-      "fp-advisor-qp1": "We are losing leads",
-      "fp-advisor-qp2": "Scheduling is chaotic",
-      "fp-advisor-qp3": "Follow-up is inconsistent",
-      "fp-advisor-qp4": "Operations feel overloaded",
-      "fp-advisor-input-placeholder": "Describe what is happening inside your operation...",
+      "fp-advisor-welcome": "Walk me through what's happening. Start with wherever the pressure is highest.",
+      "fp-advisor-qp1": "We're losing leads",
+      "fp-advisor-qp2": "Scheduling keeps breaking",
+      "fp-advisor-qp3": "Follow-up keeps falling through",
+      "fp-advisor-qp4": "We can't keep up operationally",
+      "fp-advisor-input-placeholder": "Tell me what's breaking...",
+      "advisor-ack": "That gives me enough context. I just need a couple of details to connect you with the right person.",
+      "advisor-greeting-reply": "What part of the operation is giving you the most trouble right now?",
+      "advisor-service-reply": "That depends on what you're actually trying to fix. What's breaking in the operation that's driving this?",
+      "advisor-operational-reply": "That's a pattern we see often. Is this happening constantly, or does it spike at certain moments?",
+      "advisor-unknown-reply": "What part of the operation is creating the most noise for you right now?",
+      "advisor-route-diagnostic": "I want an Executive Diagnostic",
+      "advisor-route-service": "I need a specific service",
+      "advisor-route-unsure": "Still exploring",
+      "advisor-diagnostic-reply": "Right. The Executive Diagnostic is the right starting point. I need a couple of details to route this to the right person.",
+      "advisor-service-follow-reply": "We can look at that. Before making any recommendation, tell me what process or outcome needs to improve first.",
+      "advisor-unsure-reply": "That's fine. The first step is always identifying where the money is going. Is there something urgent right now, or are you exploring options?",
+      "advisor-bridge": "That gives me enough context. I just need a couple of details to connect you with the right person.",
+      "advisor-name-label": "Name",
+      "advisor-name-ph": "Your name",
+      "advisor-email-label": "Email",
+      "advisor-email-ph": "you@company.com",
+      "advisor-btype-label": "Business type",
+      "advisor-btype-opt0": "Select...",
+      "advisor-btype-contractor": "Contractor (HVAC, Plumbing, Electrical, Roofing)",
+      "advisor-btype-multifamily": "Multifamily Operations",
+      "advisor-btype-service": "Service Business",
+      "advisor-btype-other": "Other",
+      "advisor-urgency-label": "Urgency",
+      "advisor-urgency-opt0": "Select...",
+      "advisor-urgency-immediate": "I need to resolve this now",
+      "advisor-urgency-month": "Within the next month",
+      "advisor-urgency-exploring": "Exploring options",
+      "advisor-submit": "Send to Advisory Desk",
+      "advisor-submitting": "Sending...",
+      "advisor-success-msg": "We have your information. Our Executive Advisory Desk will be in touch within 24 hours.",
+      "advisor-success-cta": "Book Executive Diagnostic",
+      "advisor-error-msg": "Unable to process your submission. Please try again or reach us directly at ceo@racbconsulting.com.",
+      "advisor-validation-name": "Please enter your name.",
+      "advisor-validation-email": "Please enter a valid email address.",
+      "advisor-validation-btype": "Please select your business type.",
+      "advisor-validation-urgency": "Please select your urgency.",
       "fp-footer-label": "Executive Consulting",
       "fp-footer-headline": "If you're still here, your operation is leaving money on the table.",
       "fp-footer-subtext": "We identify where your company is losing money — and what needs to be fixed first.",

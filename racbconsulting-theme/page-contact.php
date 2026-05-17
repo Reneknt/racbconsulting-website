@@ -208,7 +208,7 @@ get_header();
     <div id="advisor-chat-history" class="advisor-chat-history">
 
       <div class="advisor-msg advisor-msg--assistant">
-        <p data-i18n="fp-advisor-welcome">Welcome. I'm your RACBCONSULTING Executive Advisor. Tell me what is happening inside your operation, and I'll help identify the right next step.</p>
+        <p data-i18n="fp-advisor-welcome">Walk me through what's happening. Start with wherever the pressure is highest.</p>
       </div>
 
       <div id="advisor-quick-prompts" class="advisor-quick-prompts">

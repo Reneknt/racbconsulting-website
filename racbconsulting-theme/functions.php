@@ -566,6 +566,126 @@ add_action( 'wp_ajax_nopriv_racb_contact', 'racb_handle_contact_form' );
 
 
 /* ============================================================
+   6b. AJAX — Executive Advisor Capture Handler
+   ============================================================ */
+function racb_handle_advisor_form() {
+    check_ajax_referer( 'racb_nonce', 'nonce' );
+
+    // Rate limit per IP (tighter than contact form — 8 vs 12)
+    $ip       = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] ) : 'unknown';
+    $rate_key = 'racb_advisor_rl_' . md5( $ip );
+    $count    = (int) get_transient( $rate_key );
+    if ( $count > 8 ) {
+        wp_send_json_error( [ 'message' => 'Too many requests. Please try again in a few minutes.' ] );
+    }
+    set_transient( $rate_key, $count + 1, 15 * MINUTE_IN_SECONDS );
+
+    // Sanitize all inputs
+    $name          = sanitize_text_field( $_POST['name']              ?? '' );
+    $email         = sanitize_email(      $_POST['email']             ?? '' );
+    $business_type = sanitize_text_field( $_POST['business_type']     ?? '' );
+    $urgency       = sanitize_text_field( $_POST['urgency']           ?? '' );
+    $first_message = sanitize_textarea_field( $_POST['first_message'] ?? '' );
+    $lang          = sanitize_text_field( $_POST['lang']              ?? 'en' );
+    $page_url      = esc_url_raw(         $_POST['page_url']          ?? '' );
+    $quick_prompt         = sanitize_text_field(    $_POST['quick_prompt_used']    ?? '0' );
+    $intent_type          = sanitize_text_field(    $_POST['intent_type']          ?? '' );
+    $conversation_summary = sanitize_textarea_field($_POST['conversation_summary'] ?? '' );
+    $message_count        = absint(                 $_POST['message_count']        ?? 0 );
+
+    // Honeypot
+    $hp = sanitize_text_field( $_POST['website'] ?? '' );
+    if ( ! empty( $hp ) ) {
+        wp_send_json_success( [ 'message' => 'OK' ] );
+    }
+
+    // Validate required fields
+    if ( empty( $name ) || empty( $email ) || ! is_email( $email ) ) {
+        wp_send_json_error( [ 'message' => 'Name and a valid email are required.' ] );
+    }
+
+    $allowed_btypes  = [ 'contractor', 'multifamily', 'service', 'other' ];
+    $allowed_urgency = [ 'immediate', 'within_month', 'exploring' ];
+
+    if ( ! in_array( $business_type, $allowed_btypes, true ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid business type.' ] );
+    }
+    if ( ! in_array( $urgency, $allowed_urgency, true ) ) {
+        wp_send_json_error( [ 'message' => 'Invalid urgency value.' ] );
+    }
+
+    // Save to racb_lead CPT
+    $lead_id = wp_insert_post( [
+        'post_type'    => 'racb_lead',
+        'post_status'  => 'publish',
+        'post_title'   => wp_strip_all_tags( $name . ' — ' . $email . ' [Advisor]' ),
+        'post_content' => $first_message,
+    ], true );
+
+    if ( ! is_wp_error( $lead_id ) ) {
+        update_post_meta( $lead_id, 'email',             $email );
+        update_post_meta( $lead_id, 'phone',             '' );
+        update_post_meta( $lead_id, 'company',           '' );
+        update_post_meta( $lead_id, 'service',           $business_type );
+        update_post_meta( $lead_id, 'form_type',         'advisor' );
+        update_post_meta( $lead_id, 'business_type',     $business_type );
+        update_post_meta( $lead_id, 'urgency',           $urgency );
+        update_post_meta( $lead_id, 'first_message',     $first_message );
+        update_post_meta( $lead_id, 'quick_prompt_used',    $quick_prompt );
+        update_post_meta( $lead_id, 'intent_type',          $intent_type );
+        update_post_meta( $lead_id, 'conversation_summary', $conversation_summary );
+        update_post_meta( $lead_id, 'message_count',        $message_count );
+        update_post_meta( $lead_id, 'lang',                 $lang );
+        update_post_meta( $lead_id, 'page',              $page_url );
+        update_post_meta( $lead_id, 'user_agent',        isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( $_SERVER['HTTP_USER_AGENT'] ) : '' );
+
+        // Pipeline status: urgency=immediate → qualified, else → new
+        if ( taxonomy_exists( 'racb_lead_status' ) ) {
+            $pipeline_status = ( $urgency === 'immediate' ) ? 'qualified' : 'new';
+            $term = term_exists( $pipeline_status, 'racb_lead_status' );
+            if ( $term ) {
+                wp_set_post_terms( $lead_id, [ intval( $term['term_id'] ) ], 'racb_lead_status', false );
+            }
+        }
+        if ( ! empty( $business_type ) && taxonomy_exists( 'racb_lead_service' ) ) {
+            wp_set_post_terms( $lead_id, [ $business_type ], 'racb_lead_service', false );
+        }
+
+        // Fire webhook (n8n / Make / Zapier — URL set in WP Admin → Settings)
+        racb_send_lead_webhook( [
+            'id'                => $lead_id,
+            'created_at'        => current_time( 'mysql' ),
+            'source'            => 'advisor_modal',
+            'form_type'         => 'advisor',
+            'name'              => $name,
+            'email'             => $email,
+            'business_type'     => $business_type,
+            'urgency'           => $urgency,
+            'operational_problem'   => $first_message,
+            'intent_type'           => $intent_type,
+            'conversation_summary'  => $conversation_summary,
+            'message_count'         => $message_count,
+            'quick_prompt_used'     => $quick_prompt,
+            'lang'                  => $lang,
+            'page_url'              => $page_url,
+        ] );
+    }
+
+    // Internal notification email
+    $to      = get_option( 'racb_email', 'ceo@racbconsulting.com' );
+    $urgency_label = ucfirst( str_replace( '_', ' ', $urgency ) );
+    $subject = "Advisor Lead [{$urgency_label}] — {$name}";
+    $body    = "Name: {$name}\nEmail: {$email}\nBusiness Type: {$business_type}\nUrgency: {$urgency}\nIntent: {$intent_type}\nMessages: {$message_count}\n\nConversation:\n{$conversation_summary}\n\nFirst Message:\n{$first_message}\n\nQuick Prompt Used: {$quick_prompt}\nLanguage: {$lang}\nPage: {$page_url}";
+    $headers = [ 'Content-Type: text/plain; charset=UTF-8', "Reply-To: {$email}" ];
+    wp_mail( $to, $subject, $body, $headers );
+
+    wp_send_json_success( [ 'message' => 'OK' ] );
+}
+add_action( 'wp_ajax_racb_advisor',        'racb_handle_advisor_form' );
+add_action( 'wp_ajax_nopriv_racb_advisor', 'racb_handle_advisor_form' );
+
+
+/* ============================================================
    7. HELPER FUNCTIONS (usables en plantillas)
    ============================================================ */
 
@@ -734,18 +854,26 @@ function racb_render_leads_notifications_page() {
     if (!current_user_can('manage_options')) return;
 
     if (isset($_POST['racb_notify_save']) && check_admin_referer('racb_notify_save')) {
-        update_option('racb_notify_webhook_url', esc_url_raw($_POST['racb_notify_webhook_url'] ?? ''));
+        update_option('racb_notify_webhook_url',    esc_url_raw($_POST['racb_notify_webhook_url'] ?? ''));
         update_option('racb_notify_webhook_secret', sanitize_text_field($_POST['racb_notify_webhook_secret'] ?? ''));
+        $raw_key = $_POST['racb_openai_api_key'] ?? '';
+        if ($raw_key !== '***') {
+            update_option('racb_openai_api_key', sanitize_text_field($raw_key));
+        }
+        update_option('racb_advisor_model', sanitize_text_field($_POST['racb_advisor_model'] ?? 'gpt-4o-mini'));
         echo '<div class="updated notice"><p>Saved.</p></div>';
     }
 
-    $url = esc_url(get_option('racb_notify_webhook_url', ''));
+    $url    = esc_url(get_option('racb_notify_webhook_url', ''));
     $secret = esc_attr(get_option('racb_notify_webhook_secret', ''));
+    $has_key = (bool) get_option('racb_openai_api_key', '');
+    $model   = esc_attr(get_option('racb_advisor_model', 'gpt-4o-mini'));
 
-    echo '<div class="wrap"><h1>Lead Notifications</h1>';
-    echo '<p>Optional: send every new lead to a webhook (Make/Zapier/n8n). From there you can deliver it to WhatsApp/Telegram/Slack, etc.</p>';
+    echo '<div class="wrap"><h1>Lead Notifications &amp; Advisor Settings</h1>';
     echo '<form method="post">';
     wp_nonce_field('racb_notify_save');
+    echo '<h2>Webhook Notifications</h2>';
+    echo '<p>Optional: send every new lead to a webhook (Make/Zapier/n8n). From there you can deliver it to WhatsApp/Telegram/Slack, etc.</p>';
     echo '<table class="form-table" role="presentation"><tbody>';
 
     echo '<tr><th scope="row"><label for="racb_notify_webhook_url">Webhook URL</label></th>';
@@ -756,7 +884,21 @@ function racb_render_leads_notifications_page() {
     echo '<p class="description">If set, we send header <code>X-RACB-Secret</code> with this value.</p></td></tr>';
 
     echo '</tbody></table>';
-    echo '<p><button class="button button-primary" name="racb_notify_save" value="1">Save</button></p>';
+
+    echo '<h2 style="margin-top:2em;">Executive Advisor — AI Settings</h2>';
+    echo '<p>Connect the Advisor chat to OpenAI for live conversational responses. Leave blank to use the built-in keyword fallback.</p>';
+    echo '<table class="form-table" role="presentation"><tbody>';
+
+    echo '<tr><th scope="row"><label for="racb_openai_api_key">OpenAI API Key</label></th>';
+    echo '<td><input type="password" id="racb_openai_api_key" name="racb_openai_api_key" value="' . ($has_key ? '***' : '') . '" class="regular-text" autocomplete="off" />';
+    echo '<p class="description">' . ($has_key ? 'API key is set. Enter a new value to replace it.' : 'Stored server-side only. Never exposed to the browser.') . '</p></td></tr>';
+
+    echo '<tr><th scope="row"><label for="racb_advisor_model">Model</label></th>';
+    echo '<td><input type="text" id="racb_advisor_model" name="racb_advisor_model" value="' . $model . '" class="regular-text" placeholder="gpt-4o-mini" />';
+    echo '<p class="description">Default: <code>gpt-4o-mini</code>. Use <code>gpt-4o</code> for higher quality.</p></td></tr>';
+
+    echo '</tbody></table>';
+    echo '<p><button class="button button-primary" name="racb_notify_save" value="1">Save All Settings</button></p>';
     echo '</form></div>';
 }
 
@@ -774,3 +916,279 @@ function racb_send_lead_webhook($payload) {
         'body' => wp_json_encode($payload),
     ));
 }
+
+/* ============================================================
+   Executive Advisor — Persona System
+   ============================================================ */
+function racb_get_advisor_persona() {
+    try {
+        $tz   = new DateTimeZone('America/New_York');
+        $now  = new DateTime('now', $tz);
+        $hour = (int) $now->format('G');
+    } catch (Exception $e) {
+        $hour = (int) gmdate('G');
+    }
+
+    if ($hour >= 5 && $hour < 12) {
+        return array('name' => 'Daniel', 'period' => 'morning');
+    } elseif ($hour >= 12 && $hour < 17) {
+        return array('name' => 'Marcus', 'period' => 'afternoon');
+    } elseif ($hour >= 17 && $hour < 22) {
+        return array('name' => 'Sofia', 'period' => 'evening');
+    } else {
+        return array('name' => 'Daniel', 'period' => 'evening');
+    }
+}
+
+/* ============================================================
+   Executive Advisor — OpenAI Chat Endpoint
+   ============================================================ */
+function racb_handle_advisor_chat() {
+    check_ajax_referer('racb_nonce', 'nonce');
+
+    // Rate limit: 20 requests per 15 min per IP
+    $ip = sanitize_text_field(
+        isset($_SERVER['HTTP_CF_CONNECTING_IP']) ? $_SERVER['HTTP_CF_CONNECTING_IP']
+        : (isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]
+        : ($_SERVER['REMOTE_ADDR'] ?? ''))
+    );
+    $rl_key = 'racb_chat_rl_' . md5($ip);
+    $hits   = (int) get_transient($rl_key);
+    if ($hits >= 20) {
+        wp_send_json_error(array('message' => 'rate_limit'), 429);
+    }
+    set_transient($rl_key, $hits + 1, 15 * MINUTE_IN_SECONDS);
+
+    $message       = sanitize_text_field(substr(wp_unslash($_POST['message'] ?? ''), 0, 500));
+    $lang          = in_array($_POST['lang'] ?? '', array('es', 'en'), true) ? $_POST['lang'] : 'en';
+    $page_url      = esc_url_raw(wp_unslash($_POST['page_url'] ?? ''));
+    $exchange_num  = absint($_POST['message_count'] ?? 0) + 1;
+    $persona       = racb_get_advisor_persona();
+
+    // User name captured conversationally — passed from JS advisorState.userName
+    $raw_name = sanitize_text_field(substr(wp_unslash($_POST['user_name'] ?? ''), 0, 60));
+    $user_name = preg_match('/^[\p{L}\s\'\-\.]{1,60}$/u', $raw_name) ? $raw_name : '';
+
+    // Parse and sanitize conversation history (max 16 messages = 8 exchanges)
+    $raw_history = wp_unslash($_POST['history'] ?? '[]');
+    $history     = json_decode($raw_history, true);
+    if (!is_array($history)) $history = array();
+    $history     = array_slice($history, -16);
+
+    $clean_history = array();
+    foreach ($history as $h) {
+        if (!isset($h['role'], $h['content'])) continue;
+        if (!in_array($h['role'], array('user', 'assistant'), true)) continue;
+        $clean_history[] = array(
+            'role'    => $h['role'],
+            'content' => sanitize_text_field(substr($h['content'], 0, 500)),
+        );
+    }
+
+    $api_key = get_option('racb_openai_api_key', '');
+    if (!$api_key) {
+        wp_send_json_success(racb_advisor_fallback($lang));
+        return;
+    }
+
+    $model = sanitize_text_field(get_option('racb_advisor_model', 'gpt-4o-mini'));
+
+    $lang_name    = $lang === 'es' ? 'Spanish' : 'English';
+    $advisor_name = $persona['name'];
+
+    $name_ctx = $user_name
+        ? "USER NAME ALREADY KNOWN: This user's name is {$user_name}. Do NOT ask for it again. Use it naturally — once per reply at most, never every sentence. Never start a reply with their name; place it mid-sentence."
+        : "USER NAME: Not yet captured. If this is exchange 2 or later and no name has appeared in the conversation history, ask naturally — like a person, not a form. Example: \"I don't think I caught your name — who am I speaking with?\"";
+
+    $system_prompt = "You are {$advisor_name}, a senior operational advisor at RACBCONSULTING.
+
+This is not a chatbot session. It is an executive pre-qualification conversation. Your role is to identify where a business is losing money through operational failure — not marketing failure — and guide the conversation toward an Executive Diagnostic as the natural next step.
+
+You think like an operator who has worked inside these businesses. You know what breakdown looks like: leads that slip because nobody responded fast enough, scheduling that collapses under pressure, follow-up that simply stops, leadership buried in work it should never be handling.
+
+Verticals: contractors (HVAC, plumbing, electrical, roofing, general contractors), multifamily operations (property management, maintenance, vendor coordination), service businesses (professional services, medical, legal, home services).
+
+LANGUAGE: All replies in {$lang_name} only. 1–3 sentences per reply. One question per reply — never two.
+
+RESPONSE FORMAT: Valid JSON only. No text before or after. No markdown. No code fences.
+
+{\"reply\":\"...\",\"should_capture\":false,\"intent_type\":\"unknown\",\"suggested_next_step\":\"continue\",\"extracted_name\":null}
+
+---
+
+{$name_ctx}
+
+---
+
+GREETING INTELLIGENCE:
+When the user opens with a greeting (hi, hello, hola, buenas, good morning, hey, saludos, howdy, good afternoon, good evening, or any very short opener with no operational content):
+- DO NOT jump to operational questions immediately.
+- Introduce yourself briefly. Then ask for their name naturally — like a person, not a form.
+- English examples: \"{$advisor_name} here — who do I have with me?\" or \"Good to hear from you. {$advisor_name} from RACBCONSULTING. What's your name?\" Vary phrasing, never copy verbatim.
+- Spanish examples: \"Buenas — soy {$advisor_name}. ¿Con quién hablo?\" or \"{$advisor_name} de RACBCONSULTING. ¿Cómo te llamas?\"
+- Match the energy of the greeting — casual if they are casual, brief if they are brief.
+
+---
+
+CONVERSATIONAL PSYCHOLOGY:
+- Always acknowledge what the user said before asking anything. Show you heard it.
+- When someone describes pain, reflect the pattern back briefly before asking your next question. Example: \"Scheduling that breaks under job pressure usually means dispatch decisions are being made in real time without a structure to hold them.\" Then ask one focused question.
+- Normalize without trivializing: \"That's one of the places where operations bleed money quietly.\"
+- Build momentum — each question deepens the picture. Do not restart the conversation.
+- Be calm, measured, observant. Never eager. Never salesy.
+
+---
+
+NAME USAGE (once name is known):
+- Use the user's name naturally, once per reply at most, sometimes not at all.
+- Mid-sentence or at transition: \"That's the pattern, [name].\" / \"Where does this show up most for you, [name]?\" / \"[Name], the right next step here is clear.\"
+- Do NOT start every reply with their name — that sounds scripted.
+
+---
+
+DISCOVERY — OPERATIONS BEFORE TOOLS:
+If someone asks for a tool or technology, redirect to the operational problem:
+- \"I want a chatbot\" → ask what it is supposed to fix
+- \"I need automation\" → ask what is done manually that creates the most friction
+- \"I want to implement AI\" → ask what part of the operation is most expensive or fragile to maintain
+- \"I need a CRM\" → ask what is being lost or missed without one
+Never recommend a tool before understanding the operational problem.
+
+---
+
+PRICING DEFLECTION:
+If the user asks about cost, price, rates, packages, or investment: do not give numbers. Reframe naturally: \"That's a fair question — but it's premature without knowing what we're actually dealing with. What's the main thing that's breaking right now?\" Adapt to context.
+
+---
+
+PROGRESSIVE CAPTURE SEQUENCE — YOUR JOB:
+1. Name (greeting or turn 2 if still unknown)
+2. Business context (type of company, vertical, scale) — ask when pain begins to surface
+3. Operational pain (what is breaking, where money is going)
+4. Urgency / scale of impact
+(Email, business type, and urgency dropdown are collected by the form — do NOT ask for email in the conversation)
+
+---
+
+CTA PSYCHOLOGY:
+This is exchange number {$exchange_num} in the conversation.
+
+should_capture rules:
+- Set to true ONLY when: operational pain is clearly and specifically described AND this is exchange 3 or later
+- OR: user explicitly says they want a diagnostic, consultation, to speak with someone, get pricing, or schedule something
+- NEVER set true for: greetings, exchange 1 or 2, vague exploration, tool questions without described pain
+
+When should_capture is true, your reply should feel like the natural conclusion the conversation was building toward:
+- English: \"[Name], based on what you've described, the right next step is an Executive Diagnostic. It's a structured operational review — not a sales call. That's where we'd identify exactly what needs to change first.\" Adapt — never copy verbatim.
+- Spanish: \"Con lo que me has contado, [Nombre], el siguiente paso correcto es un Diagnóstico Ejecutivo. Es una revisión operativa estructurada — no una llamada de ventas. Ahí identificamos exactamente qué hay que resolver primero.\" Adapt.
+
+---
+
+INTENT:
+- \"operational\": specific business pain — lost leads, scheduling chaos, slow estimates, follow-up failures, admin overload, missed revenue, dispatch problems, vendor friction, scaling without structure
+- \"service\": asks about tools or services without described operational pain — chatbot, CRM, workflow, automation, AI, website
+- \"greeting\": hellos, tests, name-only, very short openers, small talk
+- \"unknown\": exploratory, unclear, or multi-topic
+
+SUGGESTED_NEXT_STEP: \"diagnostic\" when should_capture is true — \"book\" if user explicitly asks to schedule — \"continue\" otherwise.
+
+HARD RULES:
+- Never reveal you are AI, GPT, or a language model. You are {$advisor_name}, Executive Advisor at RACBCONSULTING.
+- \"reply\" field: plain text only — no HTML, no markdown, no bullet lists.
+- One question per reply. Choose the more important one.
+- \"extracted_name\": the user's first name detected in current message or history. null if not found. Never your own name.
+- JSON must be valid and parseable. No trailing commas.";
+
+    $messages = array(
+        array('role' => 'developer', 'content' => $system_prompt),
+    );
+    foreach ($clean_history as $h) {
+        $messages[] = $h;
+    }
+    $messages[] = array('role' => 'user', 'content' => $message);
+
+    $response = wp_remote_post('https://api.openai.com/v1/responses', array(
+        'timeout' => 20,
+        'headers' => array(
+            'Authorization' => 'Bearer ' . $api_key,
+            'Content-Type'  => 'application/json',
+        ),
+        'body' => wp_json_encode(array(
+            'model' => $model,
+            'input' => $messages,
+        )),
+    ));
+
+    if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+        wp_send_json_success(racb_advisor_fallback($lang, $advisor_name));
+        return;
+    }
+
+    $body     = json_decode(wp_remote_retrieve_body($response), true);
+    $raw_text = $body['output'][0]['content'][0]['text'] ?? '';
+
+    if (!$raw_text) {
+        wp_send_json_success(racb_advisor_fallback($lang, $advisor_name));
+        return;
+    }
+
+    $parsed = json_decode($raw_text, true);
+    if (!is_array($parsed) || !isset($parsed['reply'])) {
+        wp_send_json_success(racb_advisor_fallback($lang, $advisor_name));
+        return;
+    }
+
+    $allowed_intents = array('operational', 'service', 'greeting', 'unknown');
+    $allowed_steps   = array('continue', 'diagnostic', 'book');
+
+    // Validate extracted_name: only accept plausible first names
+    $raw_extracted = $parsed['extracted_name'] ?? null;
+    $extracted_name = null;
+    if ($raw_extracted && is_string($raw_extracted)) {
+        $clean_n = sanitize_text_field(trim($raw_extracted));
+        if ($clean_n && preg_match('/^[\p{L}\'\-\s]{1,40}$/u', $clean_n)) {
+            $extracted_name = $clean_n;
+        }
+    }
+
+    wp_send_json_success(array(
+        'reply'               => sanitize_text_field($parsed['reply']),
+        'should_capture'      => !empty($parsed['should_capture']),
+        'intent_type'         => in_array($parsed['intent_type'] ?? '', $allowed_intents, true) ? $parsed['intent_type'] : 'unknown',
+        'suggested_next_step' => in_array($parsed['suggested_next_step'] ?? '', $allowed_steps, true) ? $parsed['suggested_next_step'] : 'continue',
+        'extracted_name'      => $extracted_name,
+        'advisor_name'        => $advisor_name,
+    ));
+}
+
+function racb_advisor_fallback($lang = 'en', $advisor_name = '') {
+    if (!$advisor_name) {
+        $persona      = racb_get_advisor_persona();
+        $advisor_name = $persona['name'];
+    }
+    $pools = array(
+        'es' => array(
+            'Cuéntame qué está pasando en la operación. ¿Dónde está el mayor problema ahora mismo?',
+            'Algo está generando fricción. ¿Cuál es el punto que más está afectando la operación?',
+            '¿Qué parte de la operación está causando más ruido en este momento?',
+        ),
+        'en' => array(
+            'Walk me through what\'s happening. Where is the most pressure right now?',
+            'Something is breaking. What part of the operation is creating the most noise for you?',
+            'Tell me what\'s actually going on — start with whatever feels most urgent.',
+        ),
+    );
+    $pool = $pools[$lang] ?? $pools['en'];
+    $msg  = $pool[ absint( time() ) % count( $pool ) ];
+    return array(
+        'reply'               => $msg,
+        'should_capture'      => false,
+        'intent_type'         => 'unknown',
+        'suggested_next_step' => 'continue',
+        'extracted_name'      => null,
+        'advisor_name'        => $advisor_name,
+    );
+}
+
+add_action('wp_ajax_racb_advisor_chat',        'racb_handle_advisor_chat');
+add_action('wp_ajax_nopriv_racb_advisor_chat', 'racb_handle_advisor_chat');

@@ -1158,6 +1158,107 @@ Text Domain: racbconsulting
   }
 }
 
+/* ---- Advisor capture form ---- */
+.advisor-capture-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  width: 100%;
+}
+
+.advisor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.advisor-field label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: rgba(255,255,255,0.4);
+}
+
+.advisor-field input,
+.advisor-field select {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 7px;
+  padding: 0.6rem 0.85rem;
+  color: var(--white);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  width: 100%;
+  transition: border-color 0.2s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.advisor-field input::placeholder {
+  color: rgba(255,255,255,0.2);
+}
+
+.advisor-field input:focus,
+.advisor-field select:focus {
+  outline: none;
+  border-color: rgba(155,47,111,0.5);
+}
+
+.advisor-field select option {
+  background: #1c1c1c;
+  color: var(--white);
+}
+
+.advisor-capture-error {
+  font-size: 0.82rem;
+  color: #e57373;
+  margin: 0;
+  padding: 0 0.1rem;
+}
+
+.advisor-capture-submit {
+  background: var(--primary);
+  border: none;
+  border-radius: 8px;
+  color: var(--white);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.7rem 1.25rem;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+  text-align: center;
+  letter-spacing: 0.01em;
+  margin-top: 0.1rem;
+}
+
+.advisor-capture-submit:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+.advisor-capture-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== Advisor Typing Indicator ===== */
+
+.advisor-typing p {
+  animation: advisor-pulse 1.4s ease-in-out infinite;
+  letter-spacing: 0.2em;
+}
+
+@keyframes advisor-pulse {
+  0%, 100% { opacity: 0.3; }
+  50%       { opacity: 1;   }
+}
+
 /* ===== Toast (mensaje enviado) ===== */
 
 #toast{
