@@ -294,7 +294,7 @@
   }
 
   function sendAdvisorMessage() {
-    if (advisorState.submitted || advisorState.captureShown) return;
+    if (advisorState.submitted) return;
     var input = document.getElementById('advisor-chat-input');
     if (!input) return;
     var text = input.value.trim();
@@ -308,7 +308,7 @@
   }
 
   function sendAdvisorPrompt(btn) {
-    if (advisorState.submitted || advisorState.captureShown) return;
+    if (advisorState.submitted) return;
     var text = btn.textContent.trim();
     if (!advisorState.firstMessage) {
       advisorState.firstMessage = text;
@@ -632,7 +632,7 @@
   }
 
   function callAdvisorAPI(text) {
-    if (advisorState.captureShown || advisorState.submitted) return;
+    if (advisorState.submitted) return;
 
     advisorState.messageCount++;
     if (text) {
