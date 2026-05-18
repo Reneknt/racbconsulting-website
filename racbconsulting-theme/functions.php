@@ -972,7 +972,13 @@ function racb_apply_capture_governance( $user_message, $should_capture, $capture
 
     // ── 2. Explicit now intent ──────────────────────────────────────────────────
     $now_signals = array(
+        // hagámoslo — standalone catches all contexts; both accented and unaccented
+        'hagámoslo', 'hagamoslo',
+        // with comma (common: "sí, hagámoslo ahora")
+        'sí, hagámoslo', 'si, hagamoslo',
+        // with space (existing)
         'sí hagámoslo', 'si hagamoslo',
+        // with "ahora" suffix (existing)
         'hagámoslo ahora', 'hagamoslo ahora',
         'adelante',
         'empecemos',

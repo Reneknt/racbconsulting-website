@@ -710,11 +710,7 @@
     var wrap = document.createElement('div');
     wrap.id = 'advisor-assessment-cta';
     wrap.className = 'advisor-msg advisor-msg--assistant';
-    var p = document.createElement('p');
-    p.textContent = isEs
-      ? 'Perfecto. Iniciemos tu Executive Diagnostic. Haz click abajo para comenzar:'
-      : 'Perfect. Let\'s begin your Executive Diagnostic. Click below to get started:';
-    wrap.appendChild(p);
+    // Text is already rendered by appendAdvisorBubble(finalReply) — only render the CTA link here
     var cta = document.createElement('a');
     cta.href = MVP_URL;
     cta.target = '_blank';
@@ -830,23 +826,25 @@
         setAdvisorModalTitle(data.advisor_name);
       }
 
+      var captureReady = data.should_capture &&
+                         advisorState.messageCount >= 2 &&
+                         !advisorState.submitted;
+      var shouldLaunchAssessment = captureReady && advisorShouldLaunchAssessment();
+
       var finalReply = data.reply;
-      if (data.should_capture && advisorState.messageCount >= 2 &&
-          !advisorState.submitted && advisorShouldLaunchAssessment()) {
+      if (shouldLaunchAssessment) {
         finalReply = currentLang === 'es'
           ? 'Perfecto. Iniciemos tu Executive Diagnostic. Haz click abajo para comenzar:'
           : "Perfect. Let's begin your Executive Diagnostic. Click below to start:";
       }
       appendAdvisorBubble(finalReply);
 
-      if (data.should_capture && advisorState.messageCount >= 2 && !advisorState.submitted) {
-        if (advisorShouldLaunchAssessment()) {
-          // Route 1: operational + now → launch assessment directly, no form
-          setTimeout(renderAdvisorAssessmentCTA, 500);
-        } else {
-          // Route 2 / 3: service intent or followup → capture form for human routing
-          setTimeout(surfaceAdvisorCaptureForm, 500);
-        }
+      if (shouldLaunchAssessment) {
+        // Route 1: operational + now → assessment CTA (text already in bubble above)
+        setTimeout(renderAdvisorAssessmentCTA, 500);
+      } else if (captureReady) {
+        // Route 2 / 3: service intent or followup → capture form for human routing
+        setTimeout(surfaceAdvisorCaptureForm, 500);
       } else {
         // No form action — return focus to chat input
         setTimeout(focusAdvisorInput, 50);
