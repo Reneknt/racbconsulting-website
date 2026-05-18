@@ -827,7 +827,6 @@
       }
 
       var captureReady = data.should_capture &&
-                         advisorState.messageCount >= 2 &&
                          !advisorState.submitted;
       var shouldLaunchAssessment = captureReady && advisorShouldLaunchAssessment();
 
