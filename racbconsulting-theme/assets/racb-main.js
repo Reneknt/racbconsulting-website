@@ -394,6 +394,38 @@
     }, 300);
   }
 
+  function detectAdvisorMessageLanguage(message) {
+    var msg = (' ' + message.toLowerCase().trim() + ' ');
+
+    // Too short or single-word — no reliable signal
+    if (message.trim().length < 8 || message.trim().split(/\s+/).length < 2) return null;
+
+    // Strip known neutral technical terms before scoring
+    var neutral = ['crm', 'api', 'whatsapp', 'workflow', 'automation', 'chatbot', 'erp', 'saas'];
+    neutral.forEach(function(t) { msg = msg.replace(new RegExp(t, 'g'), ' '); });
+
+    var esSignals = [
+      'hola', 'cómo', 'como ', 'qué ', 'que ', 'gracias', 'problema',
+      'entonces', 'quiero', 'necesito', 'mañana', 'manana', 'después', 'despues',
+      'diagnóstico', 'diagnostico', 'revisión', 'revision', 'operación', 'operacion',
+      'negocio', 'dónde', 'donde', 'sería', 'seria', 'podemos', 'tenemos',
+      'perdemos', 'claro', 'buenas'
+    ];
+    var enSignals = [
+      'hello', ' how ', ' what ', 'thanks', 'problem', 'business',
+      'review', 'diagnostic', 'tomorrow', ' would ', ' could ', ' need ',
+      ' want ', ' where ', 'process', 'schedule', 'leads', 'follow'
+    ];
+
+    var esHits = 0, enHits = 0;
+    esSignals.forEach(function(s) { if (msg.indexOf(s) !== -1) esHits++; });
+    enSignals.forEach(function(s) { if (msg.indexOf(s) !== -1) enHits++; });
+
+    if (esHits >= 2 && esHits > enHits) return 'es';
+    if (enHits >= 2 && enHits > esHits) return 'en';
+    return null;
+  }
+
   function surfaceAdvisorCaptureForm() {
     if (advisorState.submitted) return;
     if (document.querySelector('.advisor-capture-form')) {
@@ -683,6 +715,13 @@
 
   function callAdvisorAPI(text) {
     if (advisorState.submitted) return;
+
+    // Conversational language detection — override currentLang if clear evidence
+    var detectedLang = detectAdvisorMessageLanguage(text);
+    if (detectedLang && detectedLang !== currentLang) {
+      console.log('[Advisor Language Override]', currentLang, '->', detectedLang);
+      currentLang = detectedLang;
+    }
 
     advisorState.messageCount++;
     if (text) {
