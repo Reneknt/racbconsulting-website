@@ -416,7 +416,8 @@
     var enSignals = [
       'hello', ' how ', ' what ', 'thanks', 'problem', 'business',
       'review', 'diagnostic', 'tomorrow', ' would ', ' could ', ' need ',
-      ' want ', ' where ', 'process', 'schedule', 'leads', 'follow'
+      ' want ', ' where ', 'process', 'schedule', 'leads', 'follow',
+      'does this', 'does it', 'usually', 'works', 'explain'
     ];
 
     var esHits = 0, enHits = 0;

@@ -1030,17 +1030,32 @@ function racb_apply_capture_governance( $user_message, $should_capture, $capture
 
     // ── 5. Ambiguous intent guard ───────────────────────────────────────────────
     $ambiguous_signals = array(
+        // curiosity / process questions — EN
+        'how does this',           // catches "how does this work", "how does this usually work"
+        'how does it work',
+        'how does it usually',
+        'what happens during',
+        'what do you review',
+        'can you explain',
+        'tell me how it works',
+        'tell me how this works',
+        'explain the process',
+        'what would be next',
+        'what happens next',
+        'tell me more',
+        'explain',
+        // curiosity / process questions — ES
+        'cómo funciona esto', 'como funciona esto',
+        'cómo sería el proceso', 'como seria el proceso',
+        'qué revisan', 'que revisan',
+        'qué pasa durante', 'que pasa durante',
+        'cuéntame cómo', 'cuentame como',
         'cómo sería', 'como seria',
         'cómo funciona', 'como funciona',
         'qué sigue', 'que sigue',
         'cómo podemos hacer entonces', 'como podemos hacer entonces',
         'cuéntame más', 'cuentame mas',
         'explícame', 'explicame',
-        'what would be next',
-        'how does it work',
-        'what happens next',
-        'tell me more',
-        'explain',
     );
     foreach ( $ambiguous_signals as $s ) {
         if ( strpos( $msg, $s ) !== false && $should_capture ) {
