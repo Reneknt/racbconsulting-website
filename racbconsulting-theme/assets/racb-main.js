@@ -699,7 +699,6 @@
   function advisorShouldLaunchAssessment() {
     return advisorState.captureMode === 'now' &&
            advisorState.intentType !== 'service' &&
-           advisorState.intentType !== 'unknown' &&
            advisorState.intentType !== 'unsure';
   }
 
