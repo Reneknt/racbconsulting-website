@@ -122,6 +122,7 @@
     captureMode: null,
     messageCount: 0,
     intentType: '',
+    requestedService: '',
     conversationSummary: '',
     conversationHistory: [],
     userName: '',
@@ -187,6 +188,7 @@
     advisorState.captureMode         = null;
     advisorState.messageCount        = 0;
     advisorState.intentType          = '';
+    advisorState.requestedService    = '';
     advisorState.conversationSummary = '';
     advisorState.conversationHistory = [];
     advisorState.userName            = '';
@@ -667,6 +669,7 @@
     body.append('first_message',          advisorState.firstMessage);
     body.append('quick_prompt_used',      advisorState.quickPromptUsed ? '1' : '0');
     body.append('intent_type',            advisorState.intentType);
+    body.append('requested_service',      advisorState.requestedService || '');
     body.append('conversation_summary',   advisorState.conversationSummary);
     body.append('message_count',          String(advisorState.messageCount));
     body.append('lang',                   currentLang);
@@ -691,6 +694,37 @@
       if (submitBtn) { submitBtn.textContent = t['advisor-submit'] || 'Send to Advisory Desk'; submitBtn.disabled = false; }
       if (errEl) { errEl.textContent = t['advisor-error-msg'] || 'Unable to process. Please try again or email ceo@racbconsulting.com.'; errEl.style.display = ''; }
     });
+  }
+
+  function advisorShouldLaunchAssessment() {
+    return advisorState.captureMode === 'now' &&
+           advisorState.intentType !== 'service' &&
+           advisorState.intentType !== 'unknown' &&
+           advisorState.intentType !== 'unsure';
+  }
+
+  function renderAdvisorAssessmentCTA() {
+    if (document.getElementById('advisor-assessment-cta')) return;
+    var history = document.getElementById('advisor-chat-history');
+    if (!history) return;
+    var isEs = (currentLang === 'es');
+    var wrap = document.createElement('div');
+    wrap.id = 'advisor-assessment-cta';
+    wrap.className = 'advisor-msg advisor-msg--assistant';
+    var p = document.createElement('p');
+    p.textContent = isEs
+      ? 'Perfecto. Iniciemos tu Executive Diagnostic. Haz click abajo para comenzar:'
+      : 'Perfect. Let\'s begin your Executive Diagnostic. Click below to get started:';
+    wrap.appendChild(p);
+    var cta = document.createElement('a');
+    cta.href = MVP_URL;
+    cta.target = '_blank';
+    cta.rel = 'noopener';
+    cta.className = 'advisor-chat-cta';
+    cta.textContent = isEs ? 'Iniciar Executive Diagnostic' : 'Start Executive Diagnostic';
+    wrap.appendChild(cta);
+    history.appendChild(wrap);
+    scrollAdvisorHistory();
   }
 
   function renderAdvisorSuccess(t) {
@@ -784,6 +818,11 @@
         advisorState.captureMode = data.capture_mode;
       }
 
+      // Track service intent for human routing
+      if (data.intent_type === 'service' && !advisorState.requestedService) {
+        advisorState.requestedService = text.slice(0, 60).trim();
+      }
+
       if (data.extracted_name && !advisorState.userName) {
         advisorState.userName = data.extracted_name;
       }
@@ -795,8 +834,13 @@
       appendAdvisorBubble(data.reply);
 
       if (data.should_capture && advisorState.messageCount >= 2 && !advisorState.submitted) {
-        // Surface form (render first time, or scroll into view if already rendered)
-        setTimeout(surfaceAdvisorCaptureForm, 500);
+        if (advisorShouldLaunchAssessment()) {
+          // Route 1: operational + now → launch assessment directly, no form
+          setTimeout(renderAdvisorAssessmentCTA, 500);
+        } else {
+          // Route 2 / 3: service intent or followup → capture form for human routing
+          setTimeout(surfaceAdvisorCaptureForm, 500);
+        }
       } else {
         // No form action — return focus to chat input
         setTimeout(focusAdvisorInput, 50);
