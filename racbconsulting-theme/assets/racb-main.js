@@ -830,7 +830,14 @@
         setAdvisorModalTitle(data.advisor_name);
       }
 
-      appendAdvisorBubble(data.reply);
+      var finalReply = data.reply;
+      if (data.should_capture && advisorState.messageCount >= 2 &&
+          !advisorState.submitted && advisorShouldLaunchAssessment()) {
+        finalReply = currentLang === 'es'
+          ? 'Perfecto. Iniciemos tu Executive Diagnostic. Haz click abajo para comenzar:'
+          : "Perfect. Let's begin your Executive Diagnostic. Click below to start:";
+      }
+      appendAdvisorBubble(finalReply);
 
       if (data.should_capture && advisorState.messageCount >= 2 && !advisorState.submitted) {
         if (advisorShouldLaunchAssessment()) {
