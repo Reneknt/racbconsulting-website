@@ -398,6 +398,49 @@
     }, 300);
   }
 
+  function deactivateExistingAdvisorCaptureForms() {
+    var forms = document.querySelectorAll('.advisor-capture-form');
+    var isEs = (currentLang === 'es');
+    forms.forEach(function(form) {
+      var wrap = form.closest('.advisor-msg');
+      if (!wrap || wrap.classList.contains('advisor-action--inactive')) return;
+      wrap.classList.add('advisor-action--inactive');
+      // Release the id so the new active form can claim it
+      if (wrap.id === 'advisor-capture-wrap') wrap.removeAttribute('id');
+      form.querySelectorAll('input, select, textarea, button').forEach(function(el) {
+        el.disabled = true;
+      });
+      var note = document.createElement('p');
+      note.className = 'advisor-action-inactive-note';
+      note.textContent = isEs
+        ? 'Hay un formulario más reciente abajo.'
+        : 'A newer form is available below.';
+      wrap.appendChild(note);
+    });
+  }
+
+  function deactivateExistingAdvisorAssessmentCTAs() {
+    var wrappers = document.querySelectorAll('.advisor-assessment-cta-wrap');
+    var isEs = (currentLang === 'es');
+    wrappers.forEach(function(wrap) {
+      if (wrap.classList.contains('advisor-action--inactive')) return;
+      wrap.classList.add('advisor-action--inactive');
+      wrap.querySelectorAll('a').forEach(function(link) {
+        link.setAttribute('aria-disabled', 'true');
+        link.setAttribute('tabindex', '-1');
+        link.removeAttribute('href');
+        link.removeAttribute('target');
+        link.removeAttribute('rel');
+      });
+      var note = document.createElement('p');
+      note.className = 'advisor-action-inactive-note';
+      note.textContent = isEs
+        ? 'Hay un enlace más reciente abajo.'
+        : 'A newer diagnostic link is available below.';
+      wrap.appendChild(note);
+    });
+  }
+
   function detectAdvisorMessageLanguage(message) {
     var msg = (' ' + message.toLowerCase().trim() + ' ');
 
@@ -433,13 +476,8 @@
 
   function surfaceAdvisorCaptureForm() {
     if (advisorState.submitted) return;
-    if (document.querySelector('.advisor-capture-form')) {
-      advisorState.captureShown = true;
-      focusExistingAdvisorCaptureForm();
-      return;
-    }
     if (advisorState.captureRendering) return;
-    advisorState.captureShown = true;
+    deactivateExistingAdvisorCaptureForms();
     renderAdvisorCaptureForm();
   }
 
@@ -508,9 +546,10 @@
   function renderAdvisorCaptureForm() {
     if (advisorState.submitted) return;
     if (advisorState.captureRendering) return;
-    if (document.querySelector('.advisor-capture-form')) {
+    // Block only if an active (non-inactive) form already exists
+    var existingForm = document.querySelector('.advisor-capture-form');
+    if (existingForm && !existingForm.closest('.advisor-action--inactive')) {
       advisorState.captureShown = true;
-      focusExistingAdvisorCaptureForm();
       return;
     }
 
@@ -706,13 +745,13 @@
   }
 
   function renderAdvisorAssessmentCTA() {
-    if (document.getElementById('advisor-assessment-cta')) return;
+    // Block only if an active (non-inactive) CTA wrap already exists
+    if (document.querySelector('.advisor-assessment-cta-wrap:not(.advisor-action--inactive)')) return;
     var history = document.getElementById('advisor-chat-history');
     if (!history) return;
     var isEs = (currentLang === 'es');
     var wrap = document.createElement('div');
-    wrap.id = 'advisor-assessment-cta';
-    wrap.className = 'advisor-msg advisor-msg--assistant';
+    wrap.className = 'advisor-msg advisor-msg--assistant advisor-assessment-cta-wrap';
     // Text is already rendered by appendAdvisorBubble(finalReply) — only render the CTA link here
     var cta = document.createElement('a');
     cta.href = MVP_URL;
@@ -727,11 +766,7 @@
   }
 
   function surfaceAdvisorAssessmentCTA() {
-    var existing = document.getElementById('advisor-assessment-cta');
-    if (existing) {
-      existing.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
+    deactivateExistingAdvisorAssessmentCTAs();
     renderAdvisorAssessmentCTA();
   }
 
