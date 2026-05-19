@@ -127,7 +127,8 @@
     conversationHistory: [],
     userName: '',
     advisorName: '',
-    sessionId: ''
+    sessionId: '',
+    assessmentShown: false
   };
 
   function generateSessionId() {
@@ -194,6 +195,7 @@
     advisorState.userName            = '';
     advisorState.advisorName         = personaName;
     advisorState.sessionId           = generateSessionId();
+    advisorState.assessmentShown     = false;
 
     setAdvisorModalTitle(personaName);
     history.innerHTML = '';
@@ -720,7 +722,17 @@
     cta.textContent = isEs ? 'Iniciar Executive Diagnostic' : 'Start Executive Diagnostic';
     wrap.appendChild(cta);
     history.appendChild(wrap);
+    advisorState.assessmentShown = true;
     scrollAdvisorHistory();
+  }
+
+  function surfaceAdvisorAssessmentCTA() {
+    var existing = document.getElementById('advisor-assessment-cta');
+    if (existing) {
+      existing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    renderAdvisorAssessmentCTA();
   }
 
   function renderAdvisorSuccess(t) {
@@ -841,7 +853,7 @@
 
       if (shouldLaunchAssessment) {
         // Route 1: operational + now → assessment CTA (text already in bubble above)
-        setTimeout(renderAdvisorAssessmentCTA, 500);
+        setTimeout(surfaceAdvisorAssessmentCTA, 500);
       } else if (captureReady) {
         // Route 2 / 3: service intent or followup → capture form for human routing
         setTimeout(surfaceAdvisorCaptureForm, 500);

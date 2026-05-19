@@ -993,9 +993,8 @@ function racb_apply_capture_governance( $user_message, $should_capture, $capture
         'let\'s begin',
         'let\'s move forward',
         'let\'s proceed',
-        'ready to proceed',
-        'ready to start',
-        'i\'m ready',
+        'i\'m ready',     // does NOT match "i'm not ready" (different substring)
+        'i am ready',
         'i\'m in',
         'go ahead',
     );
@@ -1036,7 +1035,42 @@ function racb_apply_capture_governance( $user_message, $should_capture, $capture
         return array( 'should_capture' => false, 'capture_mode' => null, 'reason' => 'early_exchange_guard' );
     }
 
-    // ── 5. Realization / acknowledgment guard ──────────────────────────────────
+    // ── 5. Hesitation / negative readiness guard ───────────────────────────────
+    // Explicit "not ready", "still thinking" blocks capture even with pain acknowledgment.
+    // Steps 2–3 already returned for mixed intent, so these are pure hesitation.
+    $hesitation_signals = array(
+        // EN
+        'not ready yet',
+        'not ready to start',
+        'not ready',
+        'maybe later',
+        'still thinking',
+        'need more time',
+        'later this week',
+        'maybe tomorrow',
+        'i want to think about it',
+        'i need to think',
+        'not today',
+        'not yet',
+        'let me think',
+        'i\'ll think about it',
+        // ES
+        'todavía no estoy', 'todavia no estoy',
+        'todavía no', 'todavia no',
+        'más adelante', 'mas adelante',
+        'no estoy listo', 'no estoy lista',
+        'necesito pensarlo',
+        'déjame pensarlo', 'dejame pensarlo',
+        'otro momento',
+        'aún no', 'aun no',
+    );
+    foreach ( $hesitation_signals as $s ) {
+        if ( strpos( $msg, $s ) !== false && $should_capture ) {
+            return array( 'should_capture' => false, 'capture_mode' => null, 'reason' => 'hesitation_guard' );
+        }
+    }
+
+    // ── 6. Realization / acknowledgment guard ──────────────────────────────────
     // These phrases deepen awareness but are NOT consent to act.
     // Steps 2–3 already handled mixed intent ("we're wasting time + let's do it"),
     // so by this point no explicit commitment was found.
