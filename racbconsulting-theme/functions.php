@@ -987,7 +987,15 @@ function racb_apply_capture_governance( $user_message, $should_capture, $capture
         'ok hagámoslo', 'ok hagamoslo',
         'yes let\'s do it',
         'let\'s do it now',
+        'let\'s do the diagnostic',
+        'do the diagnostic',
         'let\'s start',
+        'let\'s begin',
+        'let\'s move forward',
+        'let\'s proceed',
+        'ready to proceed',
+        'ready to start',
+        'i\'m ready',
         'i\'m in',
         'go ahead',
     );
@@ -1028,7 +1036,51 @@ function racb_apply_capture_governance( $user_message, $should_capture, $capture
         return array( 'should_capture' => false, 'capture_mode' => null, 'reason' => 'early_exchange_guard' );
     }
 
-    // ── 5. Ambiguous intent guard ───────────────────────────────────────────────
+    // ── 5. Realization / acknowledgment guard ──────────────────────────────────
+    // These phrases deepen awareness but are NOT consent to act.
+    // Steps 2–3 already handled mixed intent ("we're wasting time + let's do it"),
+    // so by this point no explicit commitment was found.
+    $realization_signals = array(
+        // EN — problem acknowledgment
+        'probably wasting',
+        'wasting a lot',
+        'that makes sense',
+        'this sounds familiar',
+        'i think that\'s happening',
+        'i think that is happening',
+        'we\'re likely losing',
+        'we are likely losing',
+        'this is probably hurting',
+        'that could explain',
+        'everyone is doing things manually',
+        'that sounds accurate',
+        'i can see that',
+        'that sounds right',
+        'i know what you mean',
+        'you\'re right',
+        'you are right',
+        'i agree',
+        'makes total sense',
+        // ES — acknowledgment of problem
+        'probablemente estamos perdiendo',
+        'eso tiene sentido',
+        'creo que eso está pasando', 'creo que eso esta pasando',
+        'eso podría explicarlo', 'eso podria explicarlo',
+        'seguramente estamos perdiendo',
+        'todo se hace manualmente',
+        'eso suena correcto',
+        'puedo ver el problema',
+        'tienes razón', 'tienes razon',
+        'estoy de acuerdo',
+        'tiene mucho sentido',
+    );
+    foreach ( $realization_signals as $s ) {
+        if ( strpos( $msg, $s ) !== false && $should_capture ) {
+            return array( 'should_capture' => false, 'capture_mode' => null, 'reason' => 'realization_acknowledgment_guard' );
+        }
+    }
+
+    // ── 7. Curiosity / process / ambiguous intent guard ────────────────────────
     $ambiguous_signals = array(
         // curiosity / process questions — EN
         'how does this',           // catches "how does this work", "how does this usually work"
@@ -1063,7 +1115,7 @@ function racb_apply_capture_governance( $user_message, $should_capture, $capture
         }
     }
 
-    // ── 6. Consistency guard ────────────────────────────────────────────────────
+    // ── 8. Consistency guard ────────────────────────────────────────────────────
     if ( $should_capture && ! in_array( $capture_mode, array( 'now', 'followup' ), true ) ) {
         $capture_mode = 'followup';
         $reason       = 'consistency_guard_mode_missing';
