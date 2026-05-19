@@ -143,6 +143,18 @@
     return 'Daniel';
   }
 
+  function getAdvisorTimeGreeting(lang) {
+    var h = new Date().getHours();
+    if (lang === 'es') {
+      if (h >= 5  && h < 12) return 'Buenos días';
+      if (h >= 12 && h < 19) return 'Buenas tardes';
+      return 'Buenas noches';
+    }
+    if (h >= 5  && h < 12) return 'Good morning';
+    if (h >= 12 && h < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   function setAdvisorModalTitle(name) {
     var el = document.getElementById('advisor-modal-title');
     if (el) el.textContent = name;
@@ -200,35 +212,27 @@
     setAdvisorModalTitle(personaName);
     history.innerHTML = '';
 
-    // Personalized welcome — advisor introduces themselves
-    var baseWelcome = t['fp-advisor-welcome'] || "Walk me through what's happening. Start with wherever the pressure is highest.";
-    var welcomeText = currentLang === 'es'
-      ? personaName + ' de RACBCONSULTING. ' + baseWelcome
-      : personaName + ' here. ' + baseWelcome;
+    var timeGreeting = getAdvisorTimeGreeting(currentLang);
+    var introLines = currentLang === 'es'
+      ? [
+          'Hola, ' + timeGreeting.toLowerCase() + '. Por aquí ' + personaName + '.',
+          'Explícame qué está pasando.',
+          '¿Dónde estás teniendo más presión ahora mismo?'
+        ]
+      : [
+          timeGreeting + '. ' + personaName + ' here.',
+          'Walk me through what\'s happening.',
+          'Start with the point where the pressure feels highest.'
+        ];
 
     var welcome = document.createElement('div');
     welcome.className = 'advisor-msg advisor-msg--assistant';
-    var wp = document.createElement('p');
-    wp.textContent = welcomeText;
-    welcome.appendChild(wp);
-    history.appendChild(welcome);
-
-    var prompts = document.createElement('div');
-    prompts.id = 'advisor-quick-prompts';
-    prompts.className = 'advisor-quick-prompts';
-    [
-      t['fp-advisor-qp1'] || "We're losing leads",
-      t['fp-advisor-qp2'] || 'Scheduling keeps breaking',
-      t['fp-advisor-qp3'] || 'Follow-up keeps falling through',
-      t['fp-advisor-qp4'] || "We can't keep up operationally"
-    ].forEach(function(label) {
-      var btn = document.createElement('button');
-      btn.className = 'advisor-quick-prompt';
-      btn.textContent = label;
-      btn.addEventListener('click', function() { sendAdvisorPrompt(btn); });
-      prompts.appendChild(btn);
+    introLines.forEach(function(line) {
+      var p = document.createElement('p');
+      p.textContent = line;
+      welcome.appendChild(p);
     });
-    history.appendChild(prompts);
+    history.appendChild(welcome);
 
     var input = document.getElementById('advisor-chat-input');
     if (input) { input.value = ''; input.disabled = false; }
