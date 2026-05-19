@@ -713,13 +713,6 @@ get_header();
         <p data-i18n="fp-advisor-welcome">Walk me through what's happening. Start with wherever the pressure is highest.</p>
       </div>
 
-      <div id="advisor-quick-prompts" class="advisor-quick-prompts">
-        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)" data-i18n="fp-advisor-qp1">We are losing leads</button>
-        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)" data-i18n="fp-advisor-qp2">Scheduling is chaotic</button>
-        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)" data-i18n="fp-advisor-qp3">Follow-up is inconsistent</button>
-        <button class="advisor-quick-prompt" onclick="sendAdvisorPrompt(this)" data-i18n="fp-advisor-qp4">Operations feel overloaded</button>
-      </div>
-
     </div>
 
     <div class="advisor-chat-input-area">

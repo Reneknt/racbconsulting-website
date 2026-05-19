@@ -128,7 +128,14 @@
     userName: '',
     advisorName: '',
     sessionId: '',
-    assessmentShown: false
+    assessmentShown: false,
+    currentProblem: '',        // canonical label sent to backend as context hint
+    conversationStage: 'discovery', // discovery → clarification → diagnostic_relevance → consent → capture
+    resistanceSignaled: false,
+    confusionSignaled: false,
+    frustrationSignaled: false,
+    assessmentOffered: false,
+    serviceRequestDetected: false
   };
 
   function generateSessionId() {
@@ -208,6 +215,13 @@
     advisorState.advisorName         = personaName;
     advisorState.sessionId           = generateSessionId();
     advisorState.assessmentShown     = false;
+    advisorState.currentProblem      = '';
+    advisorState.conversationStage   = 'discovery';
+    advisorState.resistanceSignaled  = false;
+    advisorState.confusionSignaled   = false;
+    advisorState.frustrationSignaled = false;
+    advisorState.assessmentOffered   = false;
+    advisorState.serviceRequestDetected = false;
 
     setAdvisorModalTitle(personaName);
     history.innerHTML = '';
@@ -445,8 +459,36 @@
     });
   }
 
+  function detectAdvisorCurrentProblem(text) {
+    var lc = text.toLowerCase();
+    if (/follow.?up|seguimiento/.test(lc))                                          return 'follow_up_failure';
+    if (/(losing|perdemos|perdiendo).*(lead|client|contact|llamada)/.test(lc))      return 'lead_leakage';
+    if (/lead.*lost|lost.*lead/.test(lc))                                           return 'lead_leakage';
+    if (/schedul|dispatch|programac|despacho/.test(lc))                             return 'scheduling_failure';
+    if (/overload|overwhelm|sobrecarg|demasiado trabajo|can.?t keep up/.test(lc))   return 'operational_overload';
+    if (/missed call|llamadas? perd/.test(lc))                                      return 'missed_call_revenue_leakage';
+    if (/(no (process|sistema|system)|sin proceso|todo.*manual|todo a mano)/.test(lc)) return 'process_breakdown';
+    return 'operational_pain';
+  }
+
   function detectAdvisorMessageLanguage(message) {
     var msg = (' ' + message.toLowerCase().trim() + ' ');
+
+    // Fast path: colloquial ES phrases — one match is sufficient, bypass length/score threshold
+    var colloquialEs = [
+      'no entiendo', 'igual no entiendo', 'igul no entiendo',
+      'me perdí', 'me perdi', 'no sigo', 'no te entiendo',
+      'no me convences', 'no me convence',
+      'volvió todo mal', 'volvio todo mal',
+      'eso no', 'no era eso', 'te fuiste por otro lado',
+      'explícame mejor', 'explicame mejor',
+      'jajaja', 'ahora sí entiendo', 'ahora si entiendo',
+      'ahora si comprendo', 'ahora sí comprendo',
+      'ya entiendo', 'no tengo claro', 'perdón', 'perdon'
+    ];
+    for (var i = 0; i < colloquialEs.length; i++) {
+      if (msg.indexOf(colloquialEs[i]) !== -1) return 'es';
+    }
 
     // Too short or single-word — no reliable signal
     if (message.trim().length < 8 || message.trim().split(/\s+/).length < 2) return null;
@@ -823,9 +865,10 @@
     body.append('lang',          currentLang);
     body.append('page_url',      window.location.href);
     body.append('history',       JSON.stringify(history));
-    body.append('message_count', String(advisorState.messageCount));
-    body.append('user_name',     advisorState.userName);
-    body.append('session_id',    advisorState.sessionId);
+    body.append('message_count',   String(advisorState.messageCount));
+    body.append('user_name',       advisorState.userName);
+    body.append('session_id',      advisorState.sessionId);
+    body.append('current_problem', advisorState.currentProblem);
 
     var ajaxUrl = typeof racbAjax !== 'undefined' ? racbAjax.ajax_url : '/wp-admin/admin-ajax.php';
 
@@ -868,6 +911,28 @@
       // Track service intent for human routing
       if (data.intent_type === 'service' && !advisorState.requestedService) {
         advisorState.requestedService = text.slice(0, 60).trim();
+        advisorState.serviceRequestDetected = true;
+      }
+
+      // Lock in current problem from the first operational message
+      if (data.intent_type === 'operational' && !advisorState.currentProblem) {
+        advisorState.currentProblem = detectAdvisorCurrentProblem(text);
+      }
+
+      // Track conversational signal states for context
+      var lc = text.toLowerCase();
+      if (/no me convenc|not convinced|no estoy convencid|no veo claro|no tengo una respuesta/.test(lc)) {
+        advisorState.resistanceSignaled = true;
+      }
+      if (/no entiendo|me perdí|me perdi|explícame|explicame|i don.t understand|i.m lost/.test(lc)) {
+        advisorState.confusionSignaled = true;
+      }
+      if (/ahora s[íi] entiendo|ahora si comprendo|ya entiendo|now i (get|understand)|got it/.test(lc)) {
+        advisorState.resistanceSignaled = false;
+        advisorState.confusionSignaled  = false;
+      }
+      if (data.should_capture && data.capture_mode === 'now') {
+        advisorState.assessmentOffered = true;
       }
 
       if (data.extracted_name && !advisorState.userName) {
@@ -1520,10 +1585,6 @@
       "fp-advisor-modal-label": "Asesor Ejecutivo Privado",
       "fp-advisor-modal-title": "Asesor Ejecutivo",
       "fp-advisor-welcome": "Cuéntame qué está pasando en la operación. Empieza por donde sientas más presión.",
-      "fp-advisor-qp1": "Estamos perdiendo leads",
-      "fp-advisor-qp2": "La programación sigue fallando",
-      "fp-advisor-qp3": "El seguimiento no es consistente",
-      "fp-advisor-qp4": "La operación no puede seguir el ritmo",
       "fp-advisor-input-placeholder": "Cuéntame qué está fallando...",
       "advisor-ack": "Con eso tengo suficiente contexto. Necesito un par de datos para conectarte con la persona correcta.",
       "advisor-greeting-reply": "¿Qué parte de la operación te está generando más presión ahora mismo?",
@@ -2170,10 +2231,6 @@
       "fp-advisor-modal-label": "Private Executive Advisor",
       "fp-advisor-modal-title": "Executive Advisor",
       "fp-advisor-welcome": "Walk me through what's happening. Start with wherever the pressure is highest.",
-      "fp-advisor-qp1": "We're losing leads",
-      "fp-advisor-qp2": "Scheduling keeps breaking",
-      "fp-advisor-qp3": "Follow-up keeps falling through",
-      "fp-advisor-qp4": "We can't keep up operationally",
       "fp-advisor-input-placeholder": "Tell me what's breaking...",
       "advisor-ack": "That gives me enough context. I just need a couple of details to connect you with the right person.",
       "advisor-greeting-reply": "What part of the operation is giving you the most trouble right now?",
